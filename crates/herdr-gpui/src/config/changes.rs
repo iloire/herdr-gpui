@@ -2,12 +2,16 @@
 //! machine's workspaces and panes are in. `repos` names checkouts to show
 //! whether or not anything is open in them; `roots` names folders whose
 //! repositories, one level down, are all read. `~/` is the home folder.
+//! `noise` adds patterns for files to fold with the generated and binary
+//! ones: `*.ext` by extension, `name/` for any folder of that name, else a
+//! file name.
 use serde::Deserialize;
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct ChangesConfig {
+    pub noise: Vec<String>,
     pub repos: Vec<String>,
     pub roots: Vec<String>,
 }

@@ -28,7 +28,7 @@ const MIN_SIDE: f32 = 0.2;
 
 /// How a line of `kind` is marked and coloured: its sign, its tint, its
 /// changed words' stronger tint, and its text colour.
-fn look(theme: &Theme, kind: Kind) -> (&'static str, Option<Rgba>, Option<Rgba>, u32) {
+pub(crate) fn look(theme: &Theme, kind: Kind) -> (&'static str, Option<Rgba>, Option<Rgba>, u32) {
     let tint = |color: u32, alpha: u32| rgba((color << 8) | alpha);
     match kind {
         Kind::Added => (

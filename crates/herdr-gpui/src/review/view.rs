@@ -21,7 +21,7 @@ use std::{
 
 mod base_menu;
 mod colours;
-pub(crate) use rows::code as styled_code;
+pub(crate) use rows::{code as styled_code, look as line_look};
 mod file_rows;
 mod files;
 mod header;

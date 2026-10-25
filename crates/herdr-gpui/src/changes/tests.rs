@@ -259,3 +259,111 @@ fn a_cancelled_pass_reads_nothing() {
     let read = discover(&targets, &|| true);
     assert!(read.repos.is_empty() && read.failed.is_empty());
 }
+
+#[test]
+fn files_sort_into_code_tests_docs_then_noise() {
+    use super::noise::{Group, group_of};
+    let extra = [
+        "*.blend".to_owned(),
+        "renders/".to_owned(),
+        "notes.db".to_owned(),
+    ];
+    for (path, group) in [
+        ("src/main.rs", Group::Code),
+        ("cad/base.py", Group::Code),
+        ("src/changes/tests.rs", Group::Tests),
+        ("tests/peek.rs", Group::Tests),
+        ("web/app.test.ts", Group::Tests),
+        ("pkg/scan_test.go", Group::Tests),
+        ("test_scan.py", Group::Tests),
+        ("README.md", Group::Docs),
+        ("docs/plan.toml", Group::Docs),
+        ("LICENSE", Group::Docs),
+        ("Cargo.lock", Group::Noise),
+        ("models/Lamp v2.STL", Group::Noise),
+        ("prints/lamp.gcode", Group::Noise),
+        ("web/dist/app.js", Group::Noise),
+        ("web/app.min.js", Group::Noise),
+        ("assets/hero.png", Group::Noise),
+        ("scene.blend", Group::Noise),
+        ("renders/a.exr", Group::Noise),
+        ("data/notes.db", Group::Noise),
+        // A dotfile is named, not an extension.
+        (".gitignore", Group::Code),
+    ] {
+        assert_eq!(group_of(path, &extra), group, "{path}");
+    }
+}
+
+#[test]
+fn groups_keep_gits_order_and_noise_tallies_by_kind() {
+    use super::noise::{Group, grouped, tally};
+    let file = |path: &str| FileChange {
+        path: path.into(),
+        kind: Kind::Untracked,
+        additions: None,
+        deletions: None,
+    };
+    let files = [
+        file("a.gcode"),
+        file("README.md"),
+        file("b.stl"),
+        file("src/z.rs"),
+        file("c.gcode"),
+        file("src/a.rs"),
+        file("old/"),
+    ];
+    let groups = grouped(&files, &[]);
+    let order: Vec<_> = groups
+        .iter()
+        .map(|(group, files)| {
+            (
+                *group,
+                files.iter().map(|f| f.path.as_str()).collect::<Vec<_>>(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        order,
+        [
+            (Group::Code, vec!["src/z.rs", "src/a.rs", "old/"]),
+            (Group::Docs, vec!["README.md"]),
+            (Group::Noise, vec!["a.gcode", "b.stl", "c.gcode"]),
+        ]
+    );
+    assert_eq!(tally(&groups[2].1), "gcode ×2, stl ×1");
+}
+
+#[test]
+fn a_peek_reads_one_files_uncommitted_lines() {
+    use crate::review::{LineKind, Peeked, peek};
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path();
+    repository(path);
+    std::fs::write(path.join("a"), "b\n").unwrap();
+    std::fs::write(path.join("new.rs"), "fn main() {}\n").unwrap();
+    let input = crate::pull_request::Input {
+        checkout: Some(path.to_str().unwrap().into()),
+        repo_key: None,
+        branch: "main".into(),
+    };
+    let Peeked::Lines { lines, words, .. } = peek(&input, "a", 40).unwrap() else {
+        panic!("expected lines");
+    };
+    let kinds: Vec<_> = lines.iter().map(|line| line.kind).collect();
+    assert_eq!(kinds, [LineKind::Hunk, LineKind::Removed, LineKind::Added]);
+    assert_eq!(words.len(), 3);
+    // An untracked file is wholly added.
+    let Peeked::Lines { lines, .. } = peek(&input, "new.rs", 40).unwrap() else {
+        panic!("expected lines");
+    };
+    let kinds: Vec<_> = lines.iter().map(|line| line.kind).collect();
+    assert_eq!(kinds, [LineKind::Hunk, LineKind::Added]);
+    assert_eq!(peek(&input, "missing", 40).unwrap(), Peeked::Gone);
+    // The branch must still be the one the checkout is on.
+    let moved = crate::pull_request::Input {
+        branch: "other".into(),
+        ..input
+    };
+    assert!(peek(&moved, "a", 40).is_err());
+}

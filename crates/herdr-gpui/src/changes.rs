@@ -16,12 +16,15 @@
 //! stays current; drawing reads what it left.
 
 mod discover;
+mod files;
+mod noise;
+mod peek;
 mod section;
 
 #[cfg(test)]
 mod tests;
 
-use crate::{HerdrWindow, sidebar::ActivityPanel};
+use crate::{HerdrWindow, sidebar::ActivityPanel, window::Flash};
 pub(crate) use discover::{Targets, discover};
 use gpui::{prelude::*, *};
 use herdr_vcs::changes::Checkout;
@@ -119,6 +122,8 @@ pub(crate) struct Changes {
     pub(crate) all: bool,
     /// Tells a read in flight to stop when the window goes.
     cancelled: Arc<AtomicBool>,
+    /// Files opened to their diff, and checkouts showing their noise.
+    peeks: peek::Peeks,
     scroll: ScrollHandle,
 }
 
@@ -132,6 +137,7 @@ impl Default for Changes {
             targets: Targets::default(),
             all: false,
             cancelled: Arc::default(),
+            peeks: peek::Peeks::default(),
             scroll: ScrollHandle::new(),
         }
     }
@@ -268,18 +274,7 @@ impl HerdrWindow {
             roots: self.config.changes.root_paths(),
             ..Targets::default()
         };
-        let Some(endpoint) = self.endpoints.first() else {
-            return targets;
-        };
-        let live = if self.selected_endpoint == 0 {
-            &self.live
-        } else {
-            &endpoint.live
-        };
-        if !endpoint.enabled || !live.local_daemon_peer || !live.status.is_connected() {
-            return targets;
-        }
-        let Some(snapshot) = live.snapshot.as_deref() else {
+        let Some(snapshot) = self.local_snapshot() else {
             return targets;
         };
         for workspace in &snapshot.workspaces {
@@ -298,6 +293,21 @@ impl HerdrWindow {
             }
         }
         targets
+    }
+
+    /// This machine's own daemon's state, when it is connected and the
+    /// user's own, whichever host the window shows.
+    fn local_snapshot(&self) -> Option<&herdr_client::protocol::ClientShellSnapshot> {
+        let endpoint = self.endpoints.first()?;
+        let live = if self.selected_endpoint == 0 {
+            &self.live
+        } else {
+            &endpoint.live
+        };
+        if !endpoint.enabled || !live.local_daemon_peer || !live.status.is_connected() {
+            return None;
+        }
+        live.snapshot.as_deref()
     }
 
     /// Runs every tick: starts a pass when one is due, or at once when what
@@ -334,10 +344,72 @@ impl HerdrWindow {
             let _ = this.update(cx, |this, cx| {
                 this.changes
                     .install(read, Instant::now() + interval, SystemTime::now());
+                this.refresh_changes_peeks(cx);
                 cx.notify();
             });
         }));
         cx.notify();
+    }
+
+    /// Opens `shown`'s uncommitted changes in a review tab at `file`, in
+    /// the workspace open in the checkout, else the one in use on this
+    /// machine. Notes go to an agent whose pane is in the checkout.
+    fn review_changes_file(
+        &mut self,
+        shown: &Shown,
+        file: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let checkout = &shown.checkout;
+        let Some(branch) = checkout.branch.clone() else {
+            self.show_flash(Flash::warning("A detached checkout cannot be reviewed"), cx);
+            return;
+        };
+        let Some(snapshot) = self.local_snapshot() else {
+            self.show_flash(Flash::warning("This machine's Herdr is not connected"), cx);
+            return;
+        };
+        let workspace = shown
+            .workspaces
+            .first()
+            .map(|workspace| workspace.id.clone())
+            .or_else(|| snapshot.focused_workspace_id.clone())
+            .or_else(|| {
+                snapshot
+                    .workspaces
+                    .first()
+                    .map(|workspace| workspace.workspace_id.clone())
+            });
+        let Some(workspace) = workspace else {
+            self.show_flash(Flash::warning("Open a workspace first"), cx);
+            return;
+        };
+        let inside = |directory: &Option<String>| {
+            directory
+                .as_deref()
+                .is_some_and(|directory| Path::new(directory).starts_with(&checkout.path))
+        };
+        let agent = snapshot
+            .panes
+            .iter()
+            .filter(|pane| pane.workspace_id == workspace)
+            .filter(|pane| inside(&pane.cwd) || inside(&pane.foreground_cwd))
+            .find_map(|pane| crate::review::agent_in(snapshot, &pane.pane_id));
+        let target = crate::browser::ReviewCheckout {
+            repo_key: Some(checkout.common_dir.clone()),
+            branch,
+            checkout: Some(checkout.path.clone()),
+        };
+        self.open_review_of(
+            target,
+            0,
+            workspace,
+            agent,
+            Some(file.to_owned()),
+            window,
+            cx,
+        );
     }
 
     /// Shows workspace `id` of this machine with its terminals.

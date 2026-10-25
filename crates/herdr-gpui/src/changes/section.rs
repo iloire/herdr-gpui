@@ -1,12 +1,12 @@
 //! Drawing the Changes section from the last read: a card per repository,
-//! and in it each checkout's branch, its uncommitted files, and its latest
-//! commits. A checkout's header opens the workspace open in it, if any.
+//! and in it each checkout's branch, its uncommitted files (`files`), and
+//! its latest commits. A checkout's header opens the workspace open in it, if any.
 //! Needs attention, the default, folds away the clean checkouts.
 
 use super::{Rank, Repo, Shown};
 use crate::HerdrWindow;
 use gpui::{prelude::*, *};
-use herdr_vcs::changes::{Commit, FileChange, Kind};
+use herdr_vcs::changes::Commit;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 impl HerdrWindow {
@@ -385,10 +385,12 @@ impl HerdrWindow {
                     this.open_changes_workspace(id, window, cx);
                 }
             }));
-        let mut block = div().flex().flex_col().pb_2().child(header);
-        for file in &checkout.files {
-            block = block.child(self.changes_file(file));
-        }
+        let mut block = div()
+            .flex()
+            .flex_col()
+            .pb_2()
+            .child(header)
+            .children(self.changes_files(&format!("{repo}-{position}"), shown, cx));
         let more = checkout.total_files.saturating_sub(checkout.files.len());
         if more > 0 {
             block = block.child(
@@ -412,44 +414,6 @@ impl HerdrWindow {
             block = block.child(self.changes_commit(commit, now));
         }
         block
-    }
-
-    fn changes_file(&self, file: &FileChange) -> Div {
-        let theme = &self.theme;
-        let small = px(self.config.ui.size - 1.);
-        let color = match file.kind {
-            Kind::Added => theme.ink(theme.palette[2]),
-            Kind::Conflicted | Kind::Deleted => theme.ink(theme.palette[1]),
-            Kind::Modified => theme.ink(theme.palette[3]),
-            Kind::Renamed => theme.ink(theme.palette[4]),
-            Kind::Untracked => theme.muted,
-        };
-        let counts = match (file.additions, file.deletions) {
-            (Some(added), Some(removed)) => Some(format!("+{added} −{removed}")),
-            _ if file.kind == Kind::Untracked => Some("new".into()),
-            _ => None,
-        };
-        div()
-            .debug_selector(|| "changes-file".into())
-            .px_3()
-            .pl(px(32.))
-            .py(px(1.))
-            .flex()
-            .items_center()
-            .gap_2()
-            .text_size(small)
-            .child(
-                div()
-                    .flex_none()
-                    .w(px(12.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(rgb(color))
-                    .child(file.kind.mark()),
-            )
-            .child(div().flex_1().min_w_0().truncate().child(file.path.clone()))
-            .children(
-                counts.map(|counts| div().flex_none().text_color(rgb(theme.muted)).child(counts)),
-            )
     }
 
     fn changes_commit(&self, commit: &Commit, now: u64) -> Div {

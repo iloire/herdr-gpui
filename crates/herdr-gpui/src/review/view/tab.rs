@@ -44,8 +44,36 @@ impl HerdrWindow {
             self.show_flash(Flash::warning("Open a workspace first"), cx);
             return;
         };
-        let scope = crate::browser::scope(&self.endpoints[self.selected_endpoint]);
         let agent = self.live.snapshot.as_deref().and_then(pick_agent);
+        self.open_review_of(
+            checkout,
+            self.selected_endpoint,
+            workspace,
+            agent,
+            None,
+            window,
+            cx,
+        );
+    }
+
+    /// Opens a review tab on `checkout` in workspace `workspace` of
+    /// endpoint `endpoint`, or brings back the one already open there, and
+    /// reads its changes again, showing `file` first when given. Another
+    /// workspace than the shown one is switched to. Notes go to `agent`.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn open_review_of(
+        &mut self,
+        checkout: ReviewCheckout,
+        endpoint: usize,
+        workspace: String,
+        agent: Option<Agent>,
+        file: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(scope) = self.endpoints.get(endpoint).map(crate::browser::scope) else {
+            return;
+        };
         let existing = cx.try_global::<Store>().and_then(|store| {
             store
                 .in_workspace(&scope, &workspace)
@@ -70,7 +98,11 @@ impl HerdrWindow {
             return;
         };
         self.dismiss_menu(window, cx);
+        self.go_to_workspace(endpoint, &workspace, cx);
         self.ensure_review(id, agent, cx);
+        if let (Some(path), Some(review)) = (file, self.reviews.get_mut(&id)) {
+            review.restore = Some(crate::review::diff::Anchor::File { path });
+        }
         self.load_review(id, cx);
         self.show_browser_tab(id, window, cx);
         if let Some(review) = self.reviews.get(&id) {

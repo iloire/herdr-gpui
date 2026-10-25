@@ -2243,20 +2243,32 @@ window at once, and `herdr-gpui ui panel NAME` shows a section.
   shows after its pane closed. Each checkout shows its branch with `↑`/`↓`
   against its upstream, how many of its commits the remote's default branch
   lacks ("2 not on origin/main", for a branch with no upstream of its own),
-  its uncommitted files with a status mark and line counts, and its five
-  latest commits. All counts are as of the last fetch; nothing contacts a
+  its uncommitted files, and its five latest commits. Files are grouped into
+  code, tests and docs, each with a status mark, its line counts and a bar
+  for its share of the checkout's change; lockfiles, build output, images,
+  archives, CAD models and printer code fold into one **Generated & binary**
+  line that tallies them (`gcode ×14, stl ×7`) and lists them when clicked.
+  Clicking a file opens its diff under it, the first 40 lines with syntax
+  colours and changed words marked as a review marks them, read again when
+  the file changes; the review icon on its row, or **Open in review** under
+  the diff, opens the checkout's review tab at that file, in the workspace
+  open in the checkout or else the one in use. All counts are as of the last fetch; nothing contacts a
   remote. Dirty checkouts come first, then unpushed, unmerged, and behind.
   **Needs attention**, the default, folds clean checkouts away; **All** lists
   them. Clicking a checkout opens the workspace open in it. It reads every 15
   seconds while shown and every two minutes otherwise, so the icon's count of
   checkouts with uncommitted work stays current. Only this machine is read,
   not SSH hosts. `[changes]` adds checkouts to it whether or not anything is
-  open in them, and folders whose repositories, one level down, are all read:
+  open in them (`repos`), folders whose repositories, one level down, are all
+  read (`roots`), and patterns for more files to fold with the generated ones
+  (`noise`: `*.ext` by extension, `name/` for any folder of that name, else a
+  file name):
 
   ```toml
   [changes]
   repos = ["~/notes", "~/dotfiles"]
   roots = ["~/code"]
+  noise = ["*.blend", "renders/"]
   ```
 
   `[sidebar] changes = false` turns the section off.
