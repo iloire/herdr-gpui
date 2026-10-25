@@ -115,7 +115,12 @@ impl HerdrWindow {
                 disk.next = Some(Instant::now() + EVERY);
                 for (id, follow) in disk.settle(read) {
                     match follow {
-                        Follow::Read => this.load_code_view(id, cx),
+                        Follow::Read => {
+                            this.load_code_view(id, cx);
+                            if let Some(editor) = this.code_editor(id).cloned() {
+                                editor.update(cx, |editor, cx| editor.disk_changed(cx));
+                            }
+                        }
                         #[cfg(any(target_os = "macos", windows))]
                         Follow::Reload => this.browser.pages.reload(id),
                         #[cfg(not(any(target_os = "macos", windows)))]

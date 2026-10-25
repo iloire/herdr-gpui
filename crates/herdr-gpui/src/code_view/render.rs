@@ -32,7 +32,7 @@ fn measure(width: Rc<Cell<f32>>) -> impl IntoElement {
 }
 
 impl HerdrWindow {
-    fn code_line_height(&self) -> f32 {
+    pub(super) fn code_line_height(&self) -> f32 {
         self.config.terminal.line_height().max(14.)
     }
 
@@ -187,6 +187,12 @@ impl HerdrWindow {
                     .text_color(rgb(theme.muted))
                     .child(path),
             )
+            .children(self.code_edit_header(id, view, cx))
+            .when(view.editing.is_none(), |header| {
+                header.child(button("Edit", "code-edit").on_click(
+                    cx.listener(move |this, _, window, cx| this.edit_code_view(id, window, cx)),
+                ))
+            })
             .child(
                 button(
                     if view.outline {
@@ -203,11 +209,16 @@ impl HerdrWindow {
                     }
                 })),
             )
-            .when(self.markdown_toggles(id, cx), |header| {
-                header.child(button("Preview", "code-markdown-preview").on_click(
-                    cx.listener(move |this, _, window, cx| this.toggle_markdown(id, window, cx)),
-                ))
-            })
+            .when(
+                view.editing.is_none() && self.markdown_toggles(id, cx),
+                |header| {
+                    header.child(button("Preview", "code-markdown-preview").on_click(
+                        cx.listener(move |this, _, window, cx| {
+                            this.toggle_markdown(id, window, cx)
+                        }),
+                    ))
+                },
+            )
             .child(
                 button("Open in Editor", "code-open-editor").on_click(
                     cx.listener(move |this, _, _, cx| this.open_code_view_in_editor(id, cx)),
@@ -232,6 +243,18 @@ impl HerdrWindow {
                 .text_color(crate::menu::danger(theme))
                 .child(error.clone())
                 .into_any_element(),
+            _ if view.editing.is_some() => view
+                .editing
+                .as_ref()
+                .map(|editing| {
+                    div()
+                        .flex_1()
+                        .min_h_0()
+                        .flex()
+                        .child(editing.editor.clone())
+                        .into_any_element()
+                })
+                .unwrap_or_else(|| div().into_any_element()),
             State::Loaded(text) => {
                 let digits = text.lines.len().max(1).ilog10() + 1;
                 let gutter = (digits as f32 + 2.) * self.config.terminal.size * 0.62;
@@ -320,7 +343,7 @@ impl HerdrWindow {
                     .code_views
                     .get(&id)
                     .is_some_and(|view| view.focus.is_focused(window));
-                if focused && this.code_view_key(id, event, cx) {
+                if focused && this.code_view_key(id, event, window, cx) {
                     cx.stop_propagation();
                 }
             }))

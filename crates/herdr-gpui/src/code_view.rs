@@ -1,7 +1,8 @@
 //! Code tabs: a local source file drawn read-only beside the workspace's
 //! terminals and pages, with its definitions listed as an outline, for a
-//! quick look without leaving the agent's side. Editing belongs to the
-//! terminal editor, which `e` opens at the line in view.
+//! quick look without leaving the agent's side. `i` makes it editable for a
+//! quick fix (`edit`); real editing belongs to the terminal editor, which
+//! `e` opens at the line in view.
 //!
 //! A tab keeps only the file's path and the line it opened at; the window
 //! keeps each tab's view, made when the tab opens or is first seen after a
@@ -11,6 +12,7 @@
 //! when it changes on disk (`browser::disk_watch`), and a markdown file's
 //! tab turns to its rendered page and back (`browser::markdown_toggle`).
 
+mod edit;
 mod render;
 
 use crate::{
@@ -155,6 +157,8 @@ pub(crate) struct CodeView {
     /// The tab's width as last laid out, which decides whether the outline
     /// fits.
     width: Rc<Cell<f32>>,
+    /// The editor while the tab is being edited.
+    editing: Option<edit::Editing>,
     /// The newest read; an older one's result is dropped.
     load: u64,
 }
@@ -297,6 +301,7 @@ impl HerdrWindow {
                 marked: None,
                 outline: true,
                 width: Rc::default(),
+                editing: None,
                 load: 0,
             },
         );
@@ -427,7 +432,13 @@ impl HerdrWindow {
     }
 
     /// Handles a key in a code tab; whether it was the tab's.
-    fn code_view_key(&mut self, id: TabId, event: &KeyDownEvent, cx: &mut Context<Self>) -> bool {
+    fn code_view_key(
+        &mut self,
+        id: TabId,
+        event: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
         let keystroke = &event.keystroke;
         let modifiers = keystroke.modifiers;
         if modifiers.control || modifiers.alt || modifiers.platform || modifiers.function {
@@ -435,6 +446,10 @@ impl HerdrWindow {
         }
         if keystroke.key == "e" && !modifiers.shift {
             self.open_code_view_in_editor(id, cx);
+            return true;
+        }
+        if keystroke.key == "i" && !modifiers.shift {
+            self.edit_code_view(id, window, cx);
             return true;
         }
         let Some(view) = self.code_views.get_mut(&id) else {

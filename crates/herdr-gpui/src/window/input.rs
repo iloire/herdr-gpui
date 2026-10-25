@@ -315,7 +315,7 @@ impl HerdrWindow {
         {
             return;
         }
-        if self.chat_focused(window, cx) {
+        if self.chat_focused(window, cx) || self.code_editor_focused(window, cx) {
             return;
         }
         // Copy mode owns the keyboard: its keys run and nothing else is typed.
