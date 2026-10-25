@@ -3726,8 +3726,18 @@ Ctrl+Shift+U is left unbound for
   the linked space's branch rather than the main checkout's `HEAD`.
   Right-click also selects the space, switching the terminal and sidebar highlight
   when the daemon confirms the selection. A compact header repeats the target name
-  and Git branch. Right-clicking another visible space while this menu is open
-  selects it and switches the menu in one click.
+  and Git branch, then the folder new tabs of the space start in (Herdr's
+  `new_workspace_cwd`), with buttons to copy it and, for this computer's spaces
+  on macOS and Linux, to open it in the file manager. Right-clicking another
+  visible space while this menu is open selects it and switches the menu in one
+  click.
+  Resting the pointer on a space shows a card with its name, branch, and that
+  folder, written from `~` for this computer's spaces. The folder follows the
+  space's shell, so it can leave the checkout the row names; the card and the
+  menu's folder line then turn yellow, and the card says "Shell left the
+  checkout". Herdr has no request to set the folder: `cd` in the space's shell
+  to move it. No card shows while a row is dragged or when spaces open their
+  menu on hover.
   With `features.sidebar_hover_menu` enabled (**Settings > General > Open
   space menus on hover**), resting the pointer on a
   space of the selected connection opens the same menu, and moving the pointer

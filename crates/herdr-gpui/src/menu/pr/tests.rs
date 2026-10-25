@@ -110,20 +110,25 @@ fn compact_pr_is_the_only_metadata_action(cx: &mut gpui::TestAppContext) {
             cx.notify();
         })
     });
+    // Tall enough for the header's name, branch, and folder lines above the
+    // tiles and the PR section; shorter windows clip the popover's foot.
+    let height = 440.;
     for width in [320., 640., 1200.] {
-        cx.simulate_resize(size(px(width), px(400.)));
+        cx.simulate_resize(size(px(width), px(height)));
         cx.update(|window, cx| {
             window.draw(cx).clear(cx);
         });
         let panel = cx.debug_bounds("menu-panel").unwrap();
         let title = cx.debug_bounds("workspace-pr-title").unwrap();
         let header = cx.debug_bounds("workspace-menu-header").unwrap();
+        // The tiles and the PR section under the header measure 350px. The
+        // bound used to be 340px, met only while a 400px window clipped them.
         assert!(
-            panel.size.height < px(340.) + header.size.height + px(4.),
+            panel.size.height < px(350.) + header.size.height + px(4.),
             "oversized popover: {panel:?}"
         );
         assert!(panel.left() >= px(0.) && panel.right() <= px(width));
-        assert!(panel.bottom() <= px(400.));
+        assert!(panel.bottom() <= px(height));
         assert!(panel.contains(&title.origin) && title.right() <= panel.right());
         assert!(cx.debug_bounds("workspace-pr-open").is_none());
         assert!(cx.debug_bounds("workspace-pr-refresh").is_none());

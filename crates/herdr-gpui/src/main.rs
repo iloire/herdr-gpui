@@ -64,6 +64,7 @@ mod endpoint;
 mod error;
 mod fan_out;
 mod find;
+mod folder;
 mod font_picker;
 mod fonts;
 mod github;

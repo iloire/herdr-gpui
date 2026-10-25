@@ -109,6 +109,8 @@ mod update_panel;
 #[cfg(test)]
 mod workspace_click_hover;
 #[cfg(test)]
+mod workspace_folder;
+#[cfg(test)]
 mod workspace_menu;
 #[cfg(test)]
 mod workspace_menu_name;

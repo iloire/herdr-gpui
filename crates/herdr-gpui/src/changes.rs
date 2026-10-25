@@ -28,7 +28,6 @@ use crate::{HerdrWindow, sidebar::ActivityPanel, window::Flash};
 pub(crate) use discover::{Targets, discover};
 use gpui::{prelude::*, *};
 use herdr_vcs::changes::Checkout;
-pub(crate) use section::home_relative;
 use std::{
     path::Path,
     sync::{

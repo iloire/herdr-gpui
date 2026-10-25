@@ -288,7 +288,7 @@ impl HerdrWindow {
         // The workspaces open in it, else where it is: a worktree no pane
         // is in any more.
         let labels = if shown.workspaces.is_empty() {
-            home_relative(&checkout.path)
+            crate::folder::home_relative(&checkout.path)
         } else {
             shown
                 .workspaces
@@ -454,16 +454,6 @@ impl HerdrWindow {
                     )),
             )
     }
-}
-
-/// `path` with the home folder written `~`.
-pub(crate) fn home_relative(path: &str) -> String {
-    herdr_client::local_path::home_dir()
-        .and_then(|home| {
-            let rest = std::path::Path::new(path).strip_prefix(&home).ok()?;
-            Some(format!("~/{}", rest.display()))
-        })
-        .unwrap_or_else(|| path.to_owned())
 }
 
 /// How long ago, to the minute while recent and to the day once old: a

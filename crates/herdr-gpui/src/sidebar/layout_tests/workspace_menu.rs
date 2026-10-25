@@ -156,7 +156,8 @@ fn workspace_popover_header_and_right_click_retargeting(cx: &mut gpui::TestAppCo
     cx.simulate_mouse_down(position, MouseButton::Right, Modifiers::default());
     cx.simulate_mouse_up(position, MouseButton::Right, Modifiers::default());
     cx.update(|_, cx| assert!(view.read(cx).menu.page.is_none()));
-    // Non-Git workspaces have a name-only header, not an empty second line.
+    // Non-Git workspaces have no branch line, not an empty one: the name, then
+    // the folder.
     cx.update(|window, cx| {
         cx.default_global::<TextProbes>().0.clear();
         view.update(cx, |view, cx| {
@@ -168,7 +169,10 @@ fn workspace_popover_header_and_right_click_retargeting(cx: &mut gpui::TestAppCo
     });
     let header = cx.debug_bounds("workspace-menu-header").unwrap();
     let name = cx.debug_bounds("workspace-menu-name").unwrap();
-    assert!(header.size.height < name.size.height * 2.);
+    let folder = cx.debug_bounds("workspace-menu-folder").unwrap();
+    assert!(cx.debug_bounds("workspace-menu-branch").is_none());
+    assert!(folder.top() >= name.bottom());
+    assert!(header.size.height < name.size.height * 2. + folder.size.height);
     cx.update(|_, cx| {
         assert!(!cx.global::<TextProbes>().0.contains_key("main"));
         assert_eq!(target_id(view.read(cx)), Some("w0"));

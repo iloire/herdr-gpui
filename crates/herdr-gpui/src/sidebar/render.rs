@@ -514,6 +514,10 @@ impl HerdrWindow {
                 .when(multi, |row| {
                     row.debug_selector(|| format!("workspace-{endpoint_id}-{id}"))
                 })
+                .when_some(
+                    self.folder_card(workspace, label, endpoint_index == 0, carried),
+                    |row, card| row.tooltip(card.tooltip()),
+                )
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.navigate_endpoint(
                         &navigate_endpoint,

@@ -7,6 +7,7 @@ mod agents;
 mod animated;
 mod cell;
 mod device_drag;
+mod folder_card;
 mod host_row;
 mod hover;
 mod layout;

@@ -3,6 +3,7 @@
 //! requests to the daemon and report what came back.
 
 mod dispatch;
+mod folder_line;
 pub(super) mod popover;
 mod render;
 mod requests;
@@ -57,7 +58,7 @@ pub(super) enum Source {
 
 impl Source {
     fn of(workspace: &ClientShellWorkspace) -> Self {
-        if left_checkout(workspace) {
+        if crate::worktree::workspace_left_checkout(workspace) {
             Self::Directory(workspace.new_workspace_cwd.clone())
         } else {
             Self::Workspace
@@ -331,23 +332,13 @@ impl NewWorktreeUnavailable {
     }
 }
 
-/// Whether `workspace` is a main checkout whose directory is no longer inside
-/// the repository Herdr keeps for it. A linked checkout's own path is not in
-/// the snapshot, so it is never judged.
-fn left_checkout(workspace: &ClientShellWorkspace) -> bool {
-    workspace.worktree.as_ref().is_some_and(|tree| {
-        !tree.is_linked_worktree
-            && crate::worktree::left_checkout(&tree.key, &workspace.new_workspace_cwd)
-    })
-}
-
 /// The repository `workspace` is in, as far as it can be trusted: none for a
 /// main checkout whose shell has left the repository Herdr keeps for it.
 pub(super) fn known_worktree(workspace: &ClientShellWorkspace) -> Option<ClientShellWorktree> {
     workspace
         .worktree
         .clone()
-        .filter(|_| !left_checkout(workspace))
+        .filter(|_| !crate::worktree::workspace_left_checkout(workspace))
 }
 
 /// The workspace focused when the new worktree shortcut is pressed, once it
@@ -372,7 +363,7 @@ pub(super) fn main_checkout<'a>(
     snapshot
         .workspaces
         .iter()
-        .find(|w| is_main_of(w, tree) && !left_checkout(w))
+        .find(|w| is_main_of(w, tree) && !crate::worktree::workspace_left_checkout(w))
 }
 
 /// Whether the daemon keeps `workspace` as `tree`'s main checkout, wherever

@@ -19,7 +19,7 @@ pub(super) use sidebar::Spacing;
 pub(super) use window::padding_ids;
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-pub(in crate::settings_window) use configuration::open_path;
+pub(in crate::settings_window) use crate::folder::open_path;
 
 pub(in crate::settings_window) const SHARED_READ_ONLY: &str =
     "Herdr's settings are read-only on this platform.";

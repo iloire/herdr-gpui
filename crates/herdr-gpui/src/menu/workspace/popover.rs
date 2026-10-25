@@ -158,7 +158,8 @@ impl HerdrWindow {
                                     .child(crate::sidebar::label_text(branch)),
                             )
                         },
-                    ),
+                    )
+                    .children(self.render_workspace_folder(target, cx)),
             );
         }
         let (tiles, rest) = layout(&self.workspace_items());

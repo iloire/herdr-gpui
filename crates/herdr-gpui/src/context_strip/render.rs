@@ -6,8 +6,9 @@
 use super::Target;
 use crate::{
     HerdrWindow,
-    changes::{Rank, home_relative, rank},
+    changes::{Rank, rank},
     config::{Theme, corners, mix},
+    folder::home_relative,
     pull_request::Outcome,
     sidebar::ActivityPanel,
 };

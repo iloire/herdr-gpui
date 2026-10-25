@@ -127,6 +127,17 @@ pub(super) fn checkout_preview(root: &str, repo: &str, branch: &str) -> String {
 
 pub(super) use herdr_github::checkout::{checkout_root, left_checkout};
 
+/// Whether `workspace` is a main checkout whose directory is no longer inside
+/// the repository Herdr keeps for it. A linked checkout's own path is not in
+/// the snapshot, so it is never judged.
+pub(super) fn workspace_left_checkout(
+    workspace: &herdr_client::protocol::ClientShellWorkspace,
+) -> bool {
+    workspace.worktree.as_ref().is_some_and(|tree| {
+        !tree.is_linked_worktree && left_checkout(&tree.key, &workspace.new_workspace_cwd)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
