@@ -141,7 +141,8 @@ impl CodeEditor {
         let line = usize::try_from(line).unwrap_or(1).saturating_sub(1);
         let start = self.buffer.line_range(line).start;
         self.buffer.select_to(start, false);
-        self.reveal_cursor();
+        self.scroll
+            .scroll_to_item_strict(line, gpui::ScrollStrategy::Center);
     }
 
     /// Reads the file again, dropping any edits.
@@ -233,10 +234,11 @@ impl CodeEditor {
         }
     }
 
-    /// Scrolls the cursor's line into view.
+    /// Scrolls the cursor's line into view, by as little as it takes.
     fn reveal_cursor(&self) {
         let line = self.buffer.line_of(self.buffer.cursor);
-        self.scroll.scroll_to_item(line, gpui::ScrollStrategy::Top);
+        self.scroll
+            .scroll_to_item(line, gpui::ScrollStrategy::Nearest);
     }
 
     fn edited(&mut self, changed: bool, cx: &mut Context<Self>) {
