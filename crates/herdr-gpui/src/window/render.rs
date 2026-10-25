@@ -955,6 +955,7 @@ impl Render for HerdrWindow {
                             .min_h_0()
                             .relative()
                             .child(content)
+                            .children(self.render_context_strip(cx))
                             .children(self.render_notices(cx))
                             .children(self.zen_status_bar(cx)),
                     ),

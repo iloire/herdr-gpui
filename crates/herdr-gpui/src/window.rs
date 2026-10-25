@@ -165,6 +165,8 @@ pub(crate) struct HerdrWindow {
     /// write straight to `config.terminal.size`, so this is what Reset Font
     /// Size restores; a session adjustment never reaches disk.
     pub(crate) configured_terminal_size: f32,
+    /// The line about the focused pane's checkout over the status bar.
+    pub(crate) context_strip: crate::context_strip::ContextStrip,
     /// Keyboard copy mode, when it holds the keyboard.
     pub(crate) copy_mode: Option<copy_mode::CopyModeState>,
     /// Prepared daemon announcement and release notes text.
@@ -664,6 +666,7 @@ impl HerdrWindow {
         self.poll_devices_overview(cx);
         self.poll_overview(cx);
         self.poll_changes(cx);
+        self.poll_context_strip(cx);
         self.poll_security(cx);
         self.poll_automations(cx);
         if self.update_system_load() {

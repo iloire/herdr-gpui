@@ -544,6 +544,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         _terminal_focus: terminal_focus,
         chrome_region: None,
         changes: Default::default(),
+        context_strip: Default::default(),
         chats: Default::default(),
         sound: Default::default(),
         bell: Default::default(),

@@ -166,6 +166,7 @@ impl HerdrWindow {
             config_load_revision: 0,
             config_watch: None,
             configured_terminal_size,
+            context_strip: Default::default(),
             copy_mode: None,
             daemon_text: Default::default(),
             deliveries: Default::default(),

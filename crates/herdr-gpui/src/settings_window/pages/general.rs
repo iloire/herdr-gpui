@@ -64,6 +64,16 @@ impl SettingsWindow {
                     )),
             )
             .child(
+                ui::row(theme, "general-context-strip", "Show context strip")
+                    .description("Branch, changes, and worktrees of the focused pane's checkout.")
+                    .switch(self.preference_toggle(
+                        "general-context-strip-toggle",
+                        self.config.show_context_strip,
+                        Preference::ShowContextStrip(!self.config.show_context_strip),
+                        cx,
+                    )),
+            )
+            .child(
                 ui::row(theme, "general-checkpoints", "Checkpoint agent turns")
                     .description("Snapshot the worktree after each agent turn.")
                     .switch(self.preference_toggle(

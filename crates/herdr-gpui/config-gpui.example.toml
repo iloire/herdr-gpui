@@ -108,6 +108,13 @@ agent_checkpoints = true
 # scanned every five seconds with ss or lsof, a remote one over SSH; false
 # stops all scanning. Also under Settings > General.
 show_listening_ports = true
+# Show a line under the terminal about the focused pane's checkout on this
+# machine: branch and how far it is from its upstream, uncommitted files and
+# lines, stashes, other worktrees with work not merged, the branch's pull
+# request, and a rebase, merge, cherry-pick, revert, or bisect stopped
+# halfway, or a git-crypt repository still locked. Read every 10 seconds
+# with read-only Git. Also under Settings > General.
+show_context_strip = true
 # Show latency and loss from this machine in the status bar, beside CPU and
 # memory. One timed TCP connect to 1.1.1.1:443 every 15 seconds, about a
 # megabyte a day, so it suits a metered link such as a phone hotspot. Also

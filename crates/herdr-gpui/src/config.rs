@@ -243,6 +243,10 @@ pub struct Config {
     /// header visible. Set in Settings > Sidebar or with
     /// `herdr-gpui config set show_agents_header false`.
     pub show_agents_header: bool,
+    /// A line at the foot of the terminal about the focused pane's checkout
+    /// on this machine: branch, changes, other worktrees, and what Git is
+    /// stopped in the middle of.
+    pub show_context_strip: bool,
     /// The mark before a device's name in the sidebar, in the layouts that
     /// draw one: where the device runs and how it is reached.
     pub show_device_icons: bool,
@@ -429,6 +433,7 @@ impl Default for Config {
             remove_merged_worktrees: false,
             show_agents: true,
             show_agents_header: true,
+            show_context_strip: true,
             show_device_icons: true,
             show_gpu_load: false,
             show_listening_ports: true,
@@ -508,6 +513,7 @@ struct Settings {
     remove_merged_worktrees: Option<bool>,
     show_agents: Option<bool>,
     show_agents_header: Option<bool>,
+    show_context_strip: Option<bool>,
     show_device_icons: Option<bool>,
     show_gpu_load: Option<bool>,
     show_listening_ports: Option<bool>,
@@ -850,6 +856,7 @@ impl Config {
         config.remove_merged_worktrees = settings.remove_merged_worktrees.unwrap_or(false);
         config.show_agents = settings.show_agents.unwrap_or(true);
         config.show_agents_header = settings.show_agents_header.unwrap_or(true);
+        config.show_context_strip = settings.show_context_strip.unwrap_or(true);
         config.show_device_icons = settings.show_device_icons.unwrap_or(true);
         config.show_gpu_load = settings.show_gpu_load.unwrap_or(false);
         config.show_listening_ports = settings.show_listening_ports.unwrap_or(true);

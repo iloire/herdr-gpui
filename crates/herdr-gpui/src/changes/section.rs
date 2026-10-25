@@ -457,7 +457,7 @@ impl HerdrWindow {
 }
 
 /// `path` with the home folder written `~`.
-fn home_relative(path: &str) -> String {
+pub(crate) fn home_relative(path: &str) -> String {
     herdr_client::local_path::home_dir()
         .and_then(|home| {
             let rest = std::path::Path::new(path).strip_prefix(&home).ok()?;

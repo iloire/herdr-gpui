@@ -51,6 +51,7 @@ mod config;
 mod config_diagnostic;
 mod connection;
 mod constants;
+mod context_strip;
 mod contrast;
 mod control;
 mod copy_mode;

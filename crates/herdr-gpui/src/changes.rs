@@ -28,6 +28,7 @@ use crate::{HerdrWindow, sidebar::ActivityPanel, window::Flash};
 pub(crate) use discover::{Targets, discover};
 use gpui::{prelude::*, *};
 use herdr_vcs::changes::Checkout;
+pub(crate) use section::home_relative;
 use std::{
     path::Path,
     sync::{
@@ -297,7 +298,7 @@ impl HerdrWindow {
 
     /// This machine's own daemon's state, when it is connected and the
     /// user's own, whichever host the window shows.
-    fn local_snapshot(&self) -> Option<&herdr_client::protocol::ClientShellSnapshot> {
+    pub(crate) fn local_snapshot(&self) -> Option<&herdr_client::protocol::ClientShellSnapshot> {
         let endpoint = self.endpoints.first()?;
         let live = if self.selected_endpoint == 0 {
             &self.live

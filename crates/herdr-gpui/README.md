@@ -1665,6 +1665,26 @@ tiled edges, and button order and support) with forced decorations. Native QA
 on GNOME Wayland remains required for dragging, resizing, the window menu,
 maximize/restore, and the shadow.
 
+## Context Strip
+
+A line between the terminal and the status bar describes the focused pane's
+folder: the checkout's branch with `↑` commits to push and `↓` to pull, its
+uncommitted files with lines added and removed, stashes, the repository's
+other worktrees and how many still hold work not on the default branch, and
+the branch's pull request with its checks once the prefetch has it. What needs
+you takes its own red segment: a rebase, merge, cherry-pick, revert, or bisect
+stopped halfway (`rebase 3/7 stopped`), or a git-crypt repository whose key is
+missing. Click the branch, changes, or worktrees to open the activity bar's
+Changes section, and the pull request to open it on GitHub.
+
+The folder is the one the pane's foreground process runs in, else its
+shell's, read with read-only Git every 10 seconds and at once when focus moves
+to another folder; nothing contacts a remote, so counts are against the last
+fetch. Only this machine's checkouts are read: on another host the strip names
+the folder and says so. The strip keeps its row whatever the folder holds, so
+moving focus never resizes the terminal, and zen mode hides it. Turn it off
+with `show_context_strip = false` or under Settings > General.
+
 ## Terminal Selection And Copy
 
 Mouse-aware applications receive clicks, button releases, drags, and pointer

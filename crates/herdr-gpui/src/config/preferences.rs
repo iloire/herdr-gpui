@@ -21,6 +21,7 @@ pub(crate) enum Preference {
     ShowSidebarGpuLoad(bool),
     AgentCheckpoints(bool),
     ShowListeningPorts(bool),
+    ShowContextStrip(bool),
     ShowAgentsHeader(bool),
     ShowSidebarSearch(bool),
     ShowRepositoryIcons(bool),
@@ -148,6 +149,9 @@ impl Config {
                 }
                 Preference::ShowListeningPorts(value) => {
                     (None, "show_listening_ports", Some(value.into()))
+                }
+                Preference::ShowContextStrip(value) => {
+                    (None, "show_context_strip", Some(value.into()))
                 }
                 Preference::ShowAgentsHeader(value) => {
                     (None, "show_agents_header", Some(value.into()))
@@ -386,6 +390,7 @@ mod tests {
             Preference::ShowNetworkQuality(true),
             Preference::AgentCheckpoints(false),
             Preference::ShowListeningPorts(false),
+            Preference::ShowContextStrip(false),
             Preference::ShowSidebarSearch(false),
             Preference::ShowRepositoryIcons(false),
             Preference::ShowDeviceIcons(false),
@@ -417,6 +422,7 @@ mod tests {
         assert_eq!(table["show_network_quality"].as_bool(), Some(true));
         assert_eq!(table["agent_checkpoints"].as_bool(), Some(false));
         assert_eq!(table["show_listening_ports"].as_bool(), Some(false));
+        assert_eq!(table["show_context_strip"].as_bool(), Some(false));
         assert_eq!(table["show_sidebar_search"].as_bool(), Some(false));
         assert_eq!(table["show_repository_icons"].as_bool(), Some(false));
         assert_eq!(table["show_device_icons"].as_bool(), Some(false));

@@ -1,5 +1,6 @@
 //! Git on the checkouts Herdr UI shows: working-tree status, what each
-//! checkout holds for the Changes section (files and recent commits), the explicit
+//! checkout holds for the Changes section (files and recent commits) and
+//! a tab's context strip, the explicit
 //! writes (commit, push, pull request creation), checkpoints of a checkout
 //! kept as Git refs on its own host, and the file and symbol index the code
 //! search reads. Every operation runs a child process, so callers queue work
@@ -10,6 +11,7 @@
 pub mod changes;
 pub mod checkpoint;
 pub mod code_index;
+pub mod context;
 mod error;
 pub mod git;
 
