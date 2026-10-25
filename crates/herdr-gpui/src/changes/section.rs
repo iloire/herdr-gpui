@@ -1,10 +1,11 @@
-//! Drawing the Changes section from the last read: a card per repository,
-//! and in it each checkout's branch, its uncommitted files (`files`), and
-//! its latest commits. A checkout's header opens the workspace open in it, if any;
-//! a commit opens in a review tab of its own, and a right click copies its name.
+//! Drawing the Changes section from the last read: a list of a card per
+//! repository, and in it each checkout's branch, its uncommitted files
+//! (`files`), and its latest commits, with the review of what is picked
+//! beside it (`pane`). A checkout's header opens the workspace open in it,
+//! if any; a right click on a commit copies its name.
 //! Needs attention, the default, folds away the clean checkouts.
 
-use super::{Rank, Repo, Shown};
+use super::{Rank, Repo, Shown, pane::Pick};
 use crate::{HerdrWindow, window::Flash};
 use gpui::{prelude::*, *};
 use herdr_vcs::changes::Commit;
@@ -98,14 +99,54 @@ impl HerdrWindow {
             .child(header)
             .child(
                 div()
-                    .id("changes-section-scroll")
+                    .flex()
                     .flex_1()
                     .min_h_0()
-                    .overflow_y_scroll()
-                    .track_scroll(&self.changes.scroll)
-                    .child(self.changes_body(cx)),
+                    .child(self.changes_list(cx))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .min_h_0()
+                            .flex()
+                            .border_l_1()
+                            .border_color(rgb(theme.active))
+                            .child(self.render_changes_review(cx)),
+                    ),
             )
             .into_any_element()
+    }
+
+    /// The list on the left, which ↑ and ↓ step through once it holds the
+    /// keyboard.
+    fn changes_list(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+        div()
+            .id("changes-section-scroll")
+            .debug_selector(|| "changes-list".into())
+            .flex_none()
+            .w(relative(0.36))
+            .min_w(px(320.))
+            .max_w(px(560.))
+            .min_h_0()
+            .overflow_y_scroll()
+            .track_scroll(&self.changes.scroll)
+            .when_some(self.changes.focus.clone(), |list, focus| {
+                list.track_focus(&focus)
+            })
+            .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                let keystroke = &event.keystroke;
+                if keystroke.modifiers.modified() {
+                    return;
+                }
+                let forward = match keystroke.key.as_str() {
+                    "down" => true,
+                    "up" => false,
+                    _ => return,
+                };
+                cx.stop_propagation();
+                this.step_change(forward, cx);
+            }))
+            .child(self.changes_body(cx))
     }
 
     /// Needs attention or All, as one control that names what it lists.
@@ -146,7 +187,7 @@ impl HerdrWindow {
 
     fn changes_body(&self, cx: &mut Context<Self>) -> Div {
         let theme = &self.theme;
-        let mut body = div().p_5().flex().flex_col().gap_5();
+        let mut body = div().p_4().flex().flex_col().gap_4();
         let repos = self.changes.repos();
         let failed = self.changes.failed();
         if repos.is_empty() && failed.is_empty() {
@@ -386,12 +427,17 @@ impl HerdrWindow {
                     this.open_changes_workspace(id, window, cx);
                 }
             }));
-        let mut block = div()
-            .flex()
-            .flex_col()
-            .pb_2()
-            .child(header)
-            .children(self.changes_files(&format!("{repo}-{position}"), shown, cx));
+        let mut block = div().flex().flex_col().pb_2().child(header).child(
+            div()
+                .debug_selector(|| "changes-files".into())
+                .flex()
+                .flex_col()
+                .when(
+                    self.change_picked(&Pick::Uncommitted(checkout.path.clone())),
+                    |files| files.bg(rgb(theme.active)),
+                )
+                .children(self.changes_files(&format!("{repo}-{position}"), shown, cx)),
+        );
         let more = checkout.total_files.saturating_sub(checkout.files.len());
         if more > 0 {
             block = block.child(
@@ -429,7 +475,12 @@ impl HerdrWindow {
         let theme = &self.theme;
         let small = px(self.config.ui.size - 1.);
         let elapsed = now.saturating_sub(u64::try_from(commit.time).unwrap_or_default());
-        let (opened, sha) = ((shown.clone(), commit.clone()), commit.sha.clone());
+        let pick = Pick::Commit {
+            checkout: shown.checkout.path.clone(),
+            sha: commit.sha.clone(),
+        };
+        let picked = self.change_picked(&pick);
+        let sha = commit.sha.clone();
         div()
             .id(SharedString::from(format!(
                 "changes-commit-{key}-{}",
@@ -444,10 +495,10 @@ impl HerdrWindow {
             .gap_2()
             .text_size(small)
             .cursor_pointer()
+            .when(picked, |row| row.bg(rgb(theme.active)))
             .hover(|style| style.bg(rgb(theme.active)))
             .on_click(cx.listener(move |this, _, window, cx| {
-                let (shown, commit) = &opened;
-                this.review_changes_commit(shown, commit, window, cx);
+                this.click_change(pick.clone(), None, window, cx);
             }))
             .on_mouse_down(
                 MouseButton::Right,

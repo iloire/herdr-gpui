@@ -1,18 +1,14 @@
 //! Drawing a checkout's changed files: grouped into code, tests, docs and
 //! the generated and binary files folded into one line, each with a bar
-//! for how much of the checkout's change it is. A row opens its peek, the
-//! diff under it; its review icon opens the file in a review tab.
+//! for how much of the checkout's change it is. A row shows the checkout's
+//! uncommitted changes beside the list, at that file.
 
 use super::{
     Shown,
     noise::{self, Group},
-    peek::{PEEK_LINES, State},
+    pane::Pick,
 };
-use crate::{
-    HerdrWindow,
-    fonts::StyledFont,
-    review::{LineKind, Peeked, line_look, styled_code},
-};
+use crate::HerdrWindow;
 use gpui::{prelude::*, *};
 use herdr_vcs::changes::{FileChange, Kind};
 
@@ -40,7 +36,7 @@ impl HerdrWindow {
         let mut rows = Vec::new();
         for (group, files) in &groups {
             if *group == Group::Noise {
-                let open = self.changes.peeks.noise_shown.contains(&checkout.path);
+                let open = self.changes.noise_shown.contains(&checkout.path);
                 rows.push(self.changes_noise_row(id, &checkout.path, files, open, cx));
                 if !open {
                     continue;
@@ -50,10 +46,6 @@ impl HerdrWindow {
             }
             for file in files {
                 rows.push(self.changes_file(id, shown, file, largest, cx));
-                let key = (checkout.path.clone(), file.path.clone());
-                if let Some(peek) = self.changes.peeks.get(&key) {
-                    rows.push(self.changes_peek(id, shown, file, &peek.state, cx));
-                }
             }
         }
         rows
@@ -132,10 +124,8 @@ impl HerdrWindow {
             _ if file.kind == Kind::Untracked => Some("new".into()),
             _ => None,
         };
-        let key = (shown.checkout.path.clone(), file.path.clone());
-        let open = self.changes.peeks.get(&key).is_some();
         // A folder Git lists whole, untracked, has no diff of its own.
-        let peekable = !file.path.ends_with('/');
+        let reviewable = !file.path.ends_with('/');
         let trimmed = file.path.trim_end_matches('/');
         let (folder, name) = match trimmed.rsplit_once('/') {
             Some((folder, name)) => (format!("{folder}/"), name.to_owned()),
@@ -157,31 +147,6 @@ impl HerdrWindow {
                 .child(div().h(px(4.)).w(px(width * share)).bg(rgb(green)))
                 .child(div().h(px(4.)).w(px(width * (1. - share))).bg(rgb(red)))
         });
-        let review = {
-            let shown = shown.clone();
-            let path = file.path.clone();
-            div()
-                .id(SharedString::from(format!(
-                    "changes-review-{id}-{}",
-                    file.path
-                )))
-                .debug_selector(|| "changes-file-review".into())
-                .flex_none()
-                .p(px(2.))
-                .rounded_sm()
-                .cursor_pointer()
-                .hover(|style| style.bg(rgb(theme.active)))
-                .child(
-                    svg()
-                        .path("icons/diff-unified.svg")
-                        .size(px(12.))
-                        .text_color(rgb(theme.subtext())),
-                )
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    cx.stop_propagation();
-                    this.review_changes_file(&shown, &path, window, cx);
-                }))
-        };
         let hover = theme.active;
         div()
             .id(SharedString::from(format!(
@@ -190,21 +155,15 @@ impl HerdrWindow {
             )))
             .debug_selector(|| "changes-file".into())
             .px_3()
-            .pl(px(18.))
+            .pl(px(32.))
             .py(px(1.))
             .flex()
             .items_center()
             .gap_2()
             .text_size(small)
-            .when(peekable, |el| {
+            .when(reviewable, |el| {
                 el.cursor_pointer().hover(move |style| style.bg(rgb(hover)))
             })
-            .child(
-                div()
-                    .flex_none()
-                    .w(px(10.))
-                    .when(peekable, |el| el.child(chevron(open, theme.muted))),
-            )
             .child(
                 div()
                     .flex_none()
@@ -226,130 +185,15 @@ impl HerdrWindow {
             .children(
                 counts.map(|counts| div().flex_none().text_color(rgb(theme.muted)).child(counts)),
             )
-            .child(review)
-            .when(peekable, |el| {
-                el.on_click(cx.listener(move |this, _, _, cx| {
-                    this.toggle_changes_peek(key.clone(), cx);
+            .when(reviewable, |el| {
+                let (pick, path) = (
+                    Pick::Uncommitted(shown.checkout.path.clone()),
+                    file.path.clone(),
+                );
+                el.on_click(cx.listener(move |this, _, window, cx| {
+                    this.click_change(pick.clone(), Some(path.clone()), window, cx);
                 }))
             })
-            .into_any_element()
-    }
-
-    fn changes_peek(
-        &self,
-        id: &str,
-        shown: &Shown,
-        file: &FileChange,
-        state: &State,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let theme = &self.theme;
-        let small = px(self.config.ui.size - 1.);
-        let note = |text: String| {
-            div()
-                .py(px(4.))
-                .text_size(small)
-                .text_color(rgb(theme.muted))
-                .child(text)
-        };
-        let body = match state {
-            State::Reading => note("Reading…".into()),
-            State::Failed(why) => note(why.clone()),
-            State::Read(Peeked::Binary) => note("Binary file".into()),
-            State::Read(Peeked::Large) => note("Too large to peek; open it in a review".into()),
-            State::Read(Peeked::Gone) => note("No longer changed".into()),
-            State::Read(Peeked::Failed(why)) => note(why.clone()),
-            State::Read(Peeked::Lines {
-                lines,
-                spans,
-                words,
-            }) => {
-                let mut code = div()
-                    .flex()
-                    .flex_col()
-                    .text_font(&self.config.terminal)
-                    .text_size(px(self.config.terminal.size - 1.));
-                for (index, line) in lines.iter().take(PEEK_LINES).enumerate() {
-                    let (sign, tint, word_tint, text) = line_look(theme, line.kind);
-                    let number = match line.kind {
-                        LineKind::Removed => line.old,
-                        _ => line.new,
-                    };
-                    let row = if line.kind == LineKind::Hunk {
-                        div()
-                            .px_1()
-                            .text_color(rgb(theme.muted))
-                            .truncate()
-                            .child(lines.text_of(line).to_owned())
-                    } else {
-                        div()
-                            .flex()
-                            .when_some(tint, |el, tint| el.bg(tint))
-                            .child(
-                                div()
-                                    .flex_none()
-                                    .w(px(32.))
-                                    .pr_1()
-                                    .flex()
-                                    .justify_end()
-                                    .text_color(rgb(theme.muted))
-                                    .children(number.map(|number| number.to_string())),
-                            )
-                            .child(div().flex_none().w(px(12.)).child(sign))
-                            .child(div().flex_1().min_w_0().text_color(rgb(text)).child(
-                                styled_code(
-                                    theme,
-                                    lines.text_of(line),
-                                    spans.get(index).map_or(&[], Vec::as_slice),
-                                    words.get(index).map_or(&[], Vec::as_slice),
-                                    word_tint,
-                                    None,
-                                ),
-                            ))
-                    };
-                    code = code.child(row);
-                }
-                let more = lines.len().saturating_sub(PEEK_LINES);
-                if lines.is_empty() {
-                    code = code.child(note("No lines changed".into()));
-                } else if more > 0 {
-                    code = code.child(note(format!("{more} more lines in the review")));
-                }
-                code
-            }
-        };
-        let shown = shown.clone();
-        let path = file.path.clone();
-        div()
-            .debug_selector(|| "changes-peek".into())
-            .ml(px(30.))
-            .mr_3()
-            .my(px(2.))
-            .px_2()
-            .py_1()
-            .rounded_md()
-            .border_1()
-            .border_color(rgb(theme.active))
-            .bg(rgb(theme.background))
-            .flex()
-            .flex_col()
-            .overflow_hidden()
-            .child(body)
-            .child(
-                div()
-                    .id(SharedString::from(format!(
-                        "changes-peek-review-{id}-{path}"
-                    )))
-                    .pt_1()
-                    .text_size(small)
-                    .text_color(rgb(theme.ink(theme.palette[4])))
-                    .cursor_pointer()
-                    .hover(|style| style.underline())
-                    .child("Open in review")
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.review_changes_file(&shown, &path, window, cx);
-                    })),
-            )
             .into_any_element()
     }
 }

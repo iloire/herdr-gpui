@@ -9,7 +9,6 @@ use crate::{
     HerdrWindow,
     browser::{Location, ReviewCheckout, Slot, Store, Tab, TabId},
     pull_request::Input,
-    review::CommitId,
     search_input::{self, SearchInput},
     window::Flash,
 };
@@ -48,7 +47,6 @@ impl HerdrWindow {
         let agent = self.live.snapshot.as_deref().and_then(pick_agent);
         self.open_review_of(
             checkout,
-            None,
             self.selected_endpoint,
             workspace,
             agent,
@@ -58,61 +56,43 @@ impl HerdrWindow {
         );
     }
 
-    /// Opens a review tab on `checkout`'s uncommitted changes, or on
-    /// `commit` of it, in workspace `workspace` of endpoint `endpoint`, or
-    /// brings back the one already open there, and reads its changes again,
-    /// showing `file` first when given. Another workspace than the shown one
-    /// is switched to. Notes go to `agent`. A checkout's commits share one
-    /// tab, which moves to the commit asked for, unless notes are being
-    /// written in it. Whether the review is shown.
+    /// Opens a review tab on `checkout` in workspace `workspace` of
+    /// endpoint `endpoint`, or brings back the one already open there, and
+    /// reads its changes again, showing `file` first when given. Another
+    /// workspace than the shown one is switched to. Notes go to `agent`.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn open_review_of(
         &mut self,
         checkout: ReviewCheckout,
-        commit: Option<CommitId>,
         endpoint: usize,
         workspace: String,
         agent: Option<Agent>,
         file: Option<String>,
         window: &mut Window,
         cx: &mut Context<Self>,
-    ) -> bool {
+    ) {
         let Some(scope) = self.endpoints.get(endpoint).map(crate::browser::scope) else {
-            return false;
+            return;
         };
-        let location = Location::Review { checkout, commit };
+        let location = Location::Review {
+            checkout,
+            commit: None,
+        };
         let existing = cx.try_global::<Store>().and_then(|store| {
             store
                 .in_workspace(&scope, &workspace)
                 .find(|tab| tab.location.as_ref() == Some(&location))
                 .map(|tab| tab.id)
         });
-        let moved = match (&existing, &location) {
-            (
-                None,
-                Location::Review {
-                    checkout,
-                    commit: Some(_),
-                },
-            ) => self.commit_tab(&scope, &workspace, checkout, cx),
-            _ => None,
-        };
-        if let Some(id) = moved {
-            let title = location.default_title();
-            let retarget = location.clone();
-            Store::update(cx, |store| store.visited(id, Some(retarget), Some(&title)));
-            // Made again from the tab, on the new commit.
-            self.reviews.remove(&id);
-        }
         let origin = agent.as_ref().map(|agent| agent.pane_id.clone());
-        let opened = existing.or(moved).or_else(|| {
+        let opened = existing.or_else(|| {
             Store::update(cx, |store| {
                 store.open(scope, &workspace, Some(location), origin)
             })
         });
         let Some(id) = opened else {
             self.show_flash(Flash::warning("Too many tabs are open"), cx);
-            return false;
+            return;
         };
         self.dismiss_menu(window, cx);
         self.go_to_workspace(endpoint, &workspace, cx);
@@ -125,33 +105,6 @@ impl HerdrWindow {
         if let Some(review) = self.reviews.get(&id) {
             window.focus(&review.focus, cx);
         }
-        true
-    }
-
-    /// The tab showing a commit of `checkout` in `workspace`, which another
-    /// of its commits may take over: not while a note is being written or
-    /// waits to be sent there.
-    fn commit_tab(
-        &self,
-        scope: &crate::browser::Scope,
-        workspace: &str,
-        checkout: &ReviewCheckout,
-        cx: &App,
-    ) -> Option<TabId> {
-        let busy = |id: TabId| {
-            self.reviews.get(&id).is_some_and(|review| {
-                review.draft.is_some()
-                    || review.editing.is_some()
-                    || review.notes.iter().any(|note| note.sent.is_none())
-            })
-        };
-        cx.try_global::<Store>()?
-            .in_workspace(scope, workspace)
-            .find(|tab| {
-                matches!(&tab.location, Some(Location::Review { checkout: open, commit: Some(_) }) if open == checkout)
-                    && !busy(tab.id)
-            })
-            .map(|tab| tab.id)
     }
 
     /// Makes `id`'s review from its tab, if the window has none yet; a newly
@@ -200,7 +153,9 @@ impl HerdrWindow {
             self.reviews.clear();
             return;
         };
-        self.reviews.retain(|id, _| store.get(*id).is_some());
+        // The Changes section's review is no tab, and lives as long as it.
+        self.reviews
+            .retain(|id, _| *id == TabId::CHANGES || store.get(*id).is_some());
         let Some((scope, workspace)) = self.browser_key() else {
             return;
         };
@@ -235,16 +190,29 @@ impl HerdrWindow {
         tab: &Tab,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let id = tab.id;
-        let Some(review) = self.reviews.get(&id) else {
+        if !self.reviews.contains_key(&tab.id) {
             return div()
                 .id(SharedString::from(slot.selector("review-loading")))
                 .size_full()
                 .into_any_element();
+        }
+        self.render_review_frame(tab.id, SharedString::from(slot.selector("review-tab")), cx)
+    }
+
+    /// Review `id` with what holds its keyboard and takes its keys, as
+    /// element `element`: in a tab, or beside the Changes list.
+    pub(super) fn render_review_frame(
+        &self,
+        id: TabId,
+        element: SharedString,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let Some(review) = self.reviews.get(&id) else {
+            return div().id(element).size_full().into_any_element();
         };
         let focus = review.focus.clone();
         div()
-            .id(SharedString::from(slot.selector("review-tab")))
+            .id(element)
             .size_full()
             .min_w_0()
             .track_focus(&focus)

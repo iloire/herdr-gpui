@@ -2269,14 +2269,16 @@ window at once, and `herdr-gpui ui panel NAME` shows a section.
   for its share of the checkout's change; lockfiles, build output, images,
   archives, CAD models and printer code fold into one **Generated & binary**
   line that tallies them (`gcode ×14, stl ×7`) and lists them when clicked.
-  Clicking a file opens its diff under it, the first 40 lines with syntax
-  colours and changed words marked as a review marks them, read again when
-  the file changes; the review icon on its row, or **Open in review** under
-  the diff, opens the checkout's review tab at that file, in the workspace
-  open in the checkout or else the one in use. Clicking a commit opens it in
-  a review tab of its own (see [Reviewing a commit](#reviewing-a-commit)),
-  even in a detached checkout; right-clicking it copies its full name. All
-  counts are as of the last fetch; nothing contacts a remote. Dirty checkouts come first, then unpushed, unmerged, and behind.
+  The list sits on the left and a review of what is picked in it on the
+  right, as in a desktop Git client: clicking a file shows the checkout's
+  uncommitted changes at that file, and clicking a commit shows that commit
+  (see [Reviewing a commit](#reviewing-a-commit)), even in a detached
+  checkout. The first item is picked when the section opens, and once the
+  list is clicked, ↑ and ↓ step through its uncommitted changes and commits.
+  The review keeps unified or side by side, whitespace, and its panels from
+  one pick to the next; while notes in it wait to be sent, another pick is
+  refused so they are not lost. Right-clicking a commit copies its full
+  name. All counts are as of the last fetch; nothing contacts a remote. Dirty checkouts come first, then unpushed, unmerged, and behind.
   **Needs attention**, the default, folds clean checkouts away; **All** lists
   them. Clicking a checkout opens the workspace open in it. It reads every 15
   seconds while shown and every two minutes otherwise, so the icon's count of
@@ -2987,17 +2989,14 @@ the titlebar's Git menu where its button would.
   note always shows the notes, and the notes icon counts the unsent ones.
   Shown in a narrow group, each panel keeps to 30% of the review.
 
-- <a id="reviewing-a-commit"></a>A commit clicked in the Changes section
-  opens in a review tab titled **Commit · abc1234**, showing what that
-  commit changed against its first parent (everything it holds, for a root
-  commit), with its subject and author in the header in place of the scope
-  switch. Its lines carry the numbers they had in the commit, the lines
-  shown above a hunk come from the commit too, and notes tell the agent
-  which commit they count in. It is read once: the checkout may change or
-  switch branch since without affecting it. The review takes the window
-  from the Changes section, and Back returns to it. A checkout's commits
-  share one tab, which moves to each commit clicked, unless notes wait to be
-  sent there; then the next commit opens beside it.
+- <a id="reviewing-a-commit"></a>A commit picked in the Changes section is
+  reviewed beside its list, showing what that commit changed against its
+  first parent (everything it holds, for a root commit), with its subject
+  and author in the header in place of the scope switch. Its lines carry the
+  numbers they had in the commit, the lines shown above a hunk come from the
+  commit too, and notes tell the agent which commit they count in. It is
+  read once: the checkout may change or switch branch since without
+  affecting it.
 - **Uncommitted** shows what is not committed yet (`git diff HEAD`).
   **Branch** shows everything the branch's pull request will hold: the
   working tree against where the branch left its base, so its commits and

@@ -334,38 +334,4 @@ fn groups_keep_gits_order_and_noise_tallies_by_kind() {
     assert_eq!(tally(&groups[2].1), "gcode ×2, stl ×1");
 }
 
-#[test]
-fn a_peek_reads_one_files_uncommitted_lines() {
-    use crate::review::{LineKind, Peeked, peek};
-    let directory = tempfile::tempdir().unwrap();
-    let path = directory.path();
-    repository(path);
-    std::fs::write(path.join("a"), "b\n").unwrap();
-    std::fs::write(path.join("new.rs"), "fn main() {}\n").unwrap();
-    let input = crate::pull_request::Input {
-        checkout: Some(path.to_str().unwrap().into()),
-        repo_key: None,
-        branch: "main".into(),
-    };
-    let Peeked::Lines { lines, words, .. } = peek(&input, "a", 40).unwrap() else {
-        panic!("expected lines");
-    };
-    let kinds: Vec<_> = lines.iter().map(|line| line.kind).collect();
-    assert_eq!(kinds, [LineKind::Hunk, LineKind::Removed, LineKind::Added]);
-    assert_eq!(words.len(), 3);
-    // An untracked file is wholly added.
-    let Peeked::Lines { lines, .. } = peek(&input, "new.rs", 40).unwrap() else {
-        panic!("expected lines");
-    };
-    let kinds: Vec<_> = lines.iter().map(|line| line.kind).collect();
-    assert_eq!(kinds, [LineKind::Hunk, LineKind::Added]);
-    assert_eq!(peek(&input, "missing", 40).unwrap(), Peeked::Gone);
-    // The branch must still be the one the checkout is on.
-    let moved = crate::pull_request::Input {
-        branch: "other".into(),
-        ..input
-    };
-    assert!(peek(&moved, "a", 40).is_err());
-}
-
 mod review;

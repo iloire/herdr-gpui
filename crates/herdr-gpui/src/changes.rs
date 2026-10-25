@@ -4,7 +4,9 @@
 //! not yet on the remote's default branch, and its latest commits, grouped
 //! by repository so a repository's worktrees sit together. What needs the
 //! user leads: dirty checkouts, then unpushed, then unmerged, then behind;
-//! clean ones are folded away until All is picked.
+//! clean ones are folded away until All is picked. What is picked in the
+//! list, a commit or a checkout's uncommitted changes, is reviewed beside it
+//! (`pane`).
 //!
 //! The checkouts come from this machine's own daemon, the trust boundary
 //! the titlebar's Git chip keeps: every workspace's folder and every pane's
@@ -18,17 +20,18 @@
 mod discover;
 mod files;
 mod noise;
-mod peek;
+mod pane;
 mod section;
 
 #[cfg(test)]
 mod tests;
 
-use crate::{HerdrWindow, sidebar::ActivityPanel, window::Flash};
+use crate::{HerdrWindow, sidebar::ActivityPanel};
 pub(crate) use discover::{Targets, discover};
 use gpui::{prelude::*, *};
-use herdr_vcs::changes::{Checkout, Commit};
+use herdr_vcs::changes::Checkout;
 use std::{
+    collections::HashSet,
     path::Path,
     sync::{
         Arc,
@@ -122,8 +125,12 @@ pub(crate) struct Changes {
     pub(crate) all: bool,
     /// Tells a read in flight to stop when the window goes.
     cancelled: Arc<AtomicBool>,
-    /// Files opened to their diff, and checkouts showing their noise.
-    peeks: peek::Peeks,
+    /// Checkouts whose generated and binary files are listed one by one.
+    noise_shown: HashSet<String>,
+    /// What the review beside the list shows, and the handle the list
+    /// holds the keyboard with once clicked.
+    picked: Option<pane::Pick>,
+    focus: Option<FocusHandle>,
     scroll: ScrollHandle,
 }
 
@@ -137,7 +144,9 @@ impl Default for Changes {
             targets: Targets::default(),
             all: false,
             cancelled: Arc::default(),
-            peeks: peek::Peeks::default(),
+            noise_shown: HashSet::new(),
+            picked: None,
+            focus: None,
             scroll: ScrollHandle::new(),
         }
     }
@@ -332,6 +341,7 @@ impl HerdrWindow {
         if self.changes.next.is_some_and(|next| next > now + interval) {
             self.changes.next = Some(now);
         }
+        self.pick_first_change(cx);
         if !self.changes.due(now) {
             return;
         }
@@ -344,102 +354,19 @@ impl HerdrWindow {
             let _ = this.update(cx, |this, cx| {
                 this.changes
                     .install(read, Instant::now() + interval, SystemTime::now());
-                this.refresh_changes_peeks(cx);
+                this.pick_first_change(cx);
                 cx.notify();
             });
         }));
         cx.notify();
     }
 
-    /// Opens `shown`'s uncommitted changes in a review tab at `file`.
-    fn review_changes_file(
-        &mut self,
-        shown: &Shown,
-        file: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if shown.checkout.branch.is_none() {
-            self.show_flash(Flash::warning("A detached checkout cannot be reviewed"), cx);
-            return;
+    /// Shows or hides a checkout's generated and binary files one by one.
+    pub(crate) fn toggle_changes_noise(&mut self, checkout: String, cx: &mut Context<Self>) {
+        if !self.changes.noise_shown.remove(&checkout) {
+            self.changes.noise_shown.insert(checkout);
         }
-        self.review_changes(shown, None, Some(file.to_owned()), window, cx);
-    }
-
-    /// Opens `commit` of `shown` in a review tab of its own. A detached
-    /// checkout can show one: a commit needs no branch.
-    fn review_changes_commit(
-        &mut self,
-        shown: &Shown,
-        commit: &Commit,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Ok(commit) = crate::review::CommitId::try_from(commit.sha.clone()) else {
-            self.show_flash(Flash::warning("That commit cannot be shown"), cx);
-            return;
-        };
-        self.review_changes(shown, Some(commit), None, window, cx);
-    }
-
-    /// Opens a review of `shown`, of its `commit` or else its uncommitted
-    /// changes at `file`, in the workspace open in the checkout, else the
-    /// one in use on this machine. Notes go to an agent whose pane is in
-    /// the checkout.
-    fn review_changes(
-        &mut self,
-        shown: &Shown,
-        commit: Option<crate::review::CommitId>,
-        file: Option<String>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let checkout = &shown.checkout;
-        // A commit's review names the branch only to label it.
-        let branch = checkout.branch.clone().unwrap_or_else(|| "HEAD".to_owned());
-        let Some(snapshot) = self.local_snapshot() else {
-            self.show_flash(Flash::warning("This machine's Herdr is not connected"), cx);
-            return;
-        };
-        let workspace = shown
-            .workspaces
-            .first()
-            .map(|workspace| workspace.id.clone())
-            .or_else(|| snapshot.focused_workspace_id.clone())
-            .or_else(|| {
-                snapshot
-                    .workspaces
-                    .first()
-                    .map(|workspace| workspace.workspace_id.clone())
-            });
-        let Some(workspace) = workspace else {
-            self.show_flash(Flash::warning("Open a workspace first"), cx);
-            return;
-        };
-        let inside = |directory: &Option<String>| {
-            directory
-                .as_deref()
-                .is_some_and(|directory| Path::new(directory).starts_with(&checkout.path))
-        };
-        let agent = snapshot
-            .panes
-            .iter()
-            .filter(|pane| pane.workspace_id == workspace)
-            .filter(|pane| inside(&pane.cwd) || inside(&pane.foreground_cwd))
-            .find_map(|pane| crate::review::agent_in(snapshot, &pane.pane_id));
-        let target = crate::browser::ReviewCheckout {
-            repo_key: Some(checkout.common_dir.clone()),
-            branch,
-            checkout: Some(checkout.path.clone()),
-        };
-        if self.open_review_of(target, commit, 0, workspace, agent, file, window, cx) {
-            // The tab is in the workspace's view, which the section covers;
-            // Back returns here.
-            self.activity.pick(ActivityPanel::Workspaces);
-            self.activity.return_to = Some(ActivityPanel::Changes);
-            self.save_chrome();
-            cx.notify();
-        }
+        cx.notify();
     }
 
     /// Shows workspace `id` of this machine with its terminals.

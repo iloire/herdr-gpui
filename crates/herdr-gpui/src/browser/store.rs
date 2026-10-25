@@ -23,6 +23,10 @@ impl TabId {
 }
 
 impl TabId {
+    /// The review the Changes section shows beside its list. Never a store
+    /// tab, which count up from one, nor a chat's page, above the middle.
+    pub(crate) const CHANGES: Self = Self(u64::MAX / 2);
+
     /// The `n`th page a chat shows in a message. Store tabs count up from
     /// one, so these count down from the top and the two never meet.
     #[cfg(any(target_os = "macos", windows, test))]
