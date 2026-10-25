@@ -57,6 +57,15 @@ Closing or detaching the GUI must leave the daemon and its terminals running.
 - Define shared types once in the lowest appropriate layer and re-export them. Do not create mirror enums or convert between them through strings.
 - Do not add a crate, runtime, service container, or speculative transport abstraction without a concrete need. Sibling checkouts are references, not build dependencies.
 
+## Where Work Happens
+
+Work happens on `main` in the main checkout, one change at a time. Do not
+create git worktrees or run builds in parallel: a fresh worktree's empty
+`target/` rebuilds every crate (over ten minutes), while the main checkout
+stays warm and `just quick` answers in about a minute. Before starting, fetch
+and fast-forward `main`; when the change is done and `just quick` passes,
+commit and push to `main`.
+
 ## Parallel Pull Requests
 
 Many pull requests are open at once, so code that every feature appends to is
