@@ -66,6 +66,8 @@ pub(crate) struct Browser {
     /// per tab, so a failure elsewhere never clears another's and sets it
     /// retrying; bounded by the tabs the store keeps.
     pub(super) failed: HashMap<TabId, SharedString>,
+    /// The files of the focused workspace's tabs, followed on disk.
+    pub(super) disk: super::disk_watch::DiskWatch,
     /// Whether the VS Code server answers, asked before its pages open.
     pub(super) code_server: super::code::CodeServer,
     pub(super) px0: super::px0::Pages,
@@ -121,6 +123,7 @@ impl Browser {
             tab_scroll: Default::default(),
             group_motion: Default::default(),
             failed: HashMap::new(),
+            disk: Default::default(),
             code_server: Default::default(),
             px0: Default::default(),
             workspaces: None,
@@ -337,6 +340,7 @@ impl HerdrWindow {
         self.poll_reveal(window, cx);
         self.poll_reviews(cx);
         self.poll_code_views(cx);
+        self.poll_tab_files(cx);
         self.poll_orchestrators(window, cx);
         self.sync_addresses(false, window, cx);
     }

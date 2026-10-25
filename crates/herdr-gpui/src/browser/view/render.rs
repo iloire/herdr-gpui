@@ -264,6 +264,32 @@ impl HerdrWindow {
                     let _ = this;
                 },
             ))
+            .when(self.markdown_toggles(id, cx), |toolbar| {
+                toolbar.child(
+                    div()
+                        .id("browser-markdown-source")
+                        .debug_selector(move || slot.selector("browser-markdown-source"))
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .gap(px(4.))
+                        .h(px(24.))
+                        .px(px(6.))
+                        .rounded(px(crate::config::corners::CONTROL))
+                        .cursor_pointer()
+                        .hover(|s| s.bg(rgb(self.theme.active)))
+                        .child(
+                            svg()
+                                .path("icons/code.svg")
+                                .size(px(13.))
+                                .text_color(rgb(self.theme.foreground)),
+                        )
+                        .child("Source")
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.toggle_markdown(id, window, cx);
+                        })),
+                )
+            })
             .child(
                 div()
                     .id("browser-address")

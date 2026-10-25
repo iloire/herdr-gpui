@@ -7,7 +7,9 @@
 //! keeps each tab's view, made when the tab opens or is first seen after a
 //! restart. The file is read, outlined, and coloured on the background
 //! executor, colours last, so its text shows before a large file is
-//! coloured. Drawing only reads what those produced.
+//! coloured. Drawing only reads what those produced. The file is read again
+//! when it changes on disk (`browser::disk_watch`), and a markdown file's
+//! tab turns to its rendered page and back (`browser::markdown_toggle`).
 
 mod render;
 
@@ -302,7 +304,7 @@ impl HerdrWindow {
     }
 
     /// Reads tab `id`'s file off the UI thread, then colours it.
-    fn load_code_view(&mut self, id: TabId, cx: &mut Context<Self>) {
+    pub(crate) fn load_code_view(&mut self, id: TabId, cx: &mut Context<Self>) {
         let Some(Location::Code { file }) = cx
             .try_global::<Store>()
             .and_then(|store| store.get(id))

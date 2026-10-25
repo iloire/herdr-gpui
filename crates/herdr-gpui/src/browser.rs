@@ -21,6 +21,7 @@ mod code;
 mod code_group;
 mod code_start;
 mod code_view;
+mod disk_watch;
 mod editor;
 #[cfg(any(target_os = "macos", windows))]
 mod favicon;
@@ -35,6 +36,7 @@ mod layouts;
 mod location;
 #[cfg(any(target_os = "macos", windows, test))]
 mod markdown;
+mod markdown_toggle;
 #[cfg(any(target_os = "macos", windows))]
 mod native;
 #[cfg(any(target_os = "macos", windows))]
@@ -79,6 +81,7 @@ pub(crate) use layouts::Layouts;
 #[cfg(any(target_os = "macos", windows))]
 pub(crate) use location::PostedFrom;
 pub(crate) use location::{LocalFile, Location, OrchestratorRepo, ReviewCheckout};
+pub(crate) use markdown_toggle::renders as renders_markdown;
 #[cfg(any(target_os = "macos", windows))]
 pub(crate) use native::Pages;
 #[cfg(target_os = "macos")]

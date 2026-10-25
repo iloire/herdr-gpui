@@ -203,6 +203,11 @@ impl HerdrWindow {
                     }
                 })),
             )
+            .when(self.markdown_toggles(id, cx), |header| {
+                header.child(button("Preview", "code-markdown-preview").on_click(
+                    cx.listener(move |this, _, window, cx| this.toggle_markdown(id, window, cx)),
+                ))
+            })
             .child(
                 button("Open in Editor", "code-open-editor").on_click(
                     cx.listener(move |this, _, _, cx| this.open_code_view_in_editor(id, cx)),

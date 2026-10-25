@@ -1,8 +1,9 @@
 //! Drawing the Files section: a header naming the checkout and the folder
 //! followed, the changed files newest first, then the tree. Every row has
 //! one height so the list draws only the rows in view, however large the
-//! checkout. A file opens in a code tab beside the terminals, or with the
-//! secondary modifier in the terminal editor beside the focused pane.
+//! checkout. A file opens in a code tab beside the terminals, a markdown
+//! file rendered (see `browser::markdown_toggle`), or with the secondary
+//! modifier in the terminal editor beside the focused pane.
 
 use super::{
     Status,
@@ -417,6 +418,8 @@ impl HerdrWindow {
         self.files.selected = Some(path.to_owned());
         if in_editor {
             self.open_in_editor(&target, None, cx);
+        } else if crate::browser::renders_markdown(&target.path) {
+            self.open_markdown(&target.path, window, cx);
         } else {
             self.open_code_view(&target, window, cx);
         }
