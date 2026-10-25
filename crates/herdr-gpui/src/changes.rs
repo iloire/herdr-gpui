@@ -27,7 +27,7 @@ mod tests;
 use crate::{HerdrWindow, sidebar::ActivityPanel, window::Flash};
 pub(crate) use discover::{Targets, discover};
 use gpui::{prelude::*, *};
-use herdr_vcs::changes::Checkout;
+use herdr_vcs::changes::{Checkout, Commit};
 use std::{
     path::Path,
     sync::{
@@ -351,9 +351,7 @@ impl HerdrWindow {
         cx.notify();
     }
 
-    /// Opens `shown`'s uncommitted changes in a review tab at `file`, in
-    /// the workspace open in the checkout, else the one in use on this
-    /// machine. Notes go to an agent whose pane is in the checkout.
+    /// Opens `shown`'s uncommitted changes in a review tab at `file`.
     fn review_changes_file(
         &mut self,
         shown: &Shown,
@@ -361,11 +359,44 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let checkout = &shown.checkout;
-        let Some(branch) = checkout.branch.clone() else {
+        if shown.checkout.branch.is_none() {
             self.show_flash(Flash::warning("A detached checkout cannot be reviewed"), cx);
             return;
+        }
+        self.review_changes(shown, None, Some(file.to_owned()), window, cx);
+    }
+
+    /// Opens `commit` of `shown` in a review tab of its own. A detached
+    /// checkout can show one: a commit needs no branch.
+    fn review_changes_commit(
+        &mut self,
+        shown: &Shown,
+        commit: &Commit,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Ok(commit) = crate::review::CommitId::try_from(commit.sha.clone()) else {
+            self.show_flash(Flash::warning("That commit cannot be shown"), cx);
+            return;
         };
+        self.review_changes(shown, Some(commit), None, window, cx);
+    }
+
+    /// Opens a review of `shown`, of its `commit` or else its uncommitted
+    /// changes at `file`, in the workspace open in the checkout, else the
+    /// one in use on this machine. Notes go to an agent whose pane is in
+    /// the checkout.
+    fn review_changes(
+        &mut self,
+        shown: &Shown,
+        commit: Option<crate::review::CommitId>,
+        file: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let checkout = &shown.checkout;
+        // A commit's review names the branch only to label it.
+        let branch = checkout.branch.clone().unwrap_or_else(|| "HEAD".to_owned());
         let Some(snapshot) = self.local_snapshot() else {
             self.show_flash(Flash::warning("This machine's Herdr is not connected"), cx);
             return;
@@ -401,15 +432,7 @@ impl HerdrWindow {
             branch,
             checkout: Some(checkout.path.clone()),
         };
-        self.open_review_of(
-            target,
-            0,
-            workspace,
-            agent,
-            Some(file.to_owned()),
-            window,
-            cx,
-        );
+        self.open_review_of(target, commit, 0, workspace, agent, file, window, cx);
     }
 
     /// Shows workspace `id` of this machine with its terminals.

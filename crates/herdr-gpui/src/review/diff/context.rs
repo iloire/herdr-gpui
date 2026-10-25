@@ -1,11 +1,16 @@
-//! The unchanged lines a hunk leaves out above it, read from the working
-//! tree on request so a hunk can be read in more of its surroundings.
+//! The unchanged lines a hunk leaves out above it, read on request from the
+//! working tree, or from the commit a review shows, so a hunk can be read in
+//! more of its surroundings.
 use super::{Kind, Lines, load::inside, parse::hunk_starts};
 use std::{
-    io::{BufRead as _, BufReader, Read as _},
+    io::{BufRead, BufReader, Read as _},
     ops::Range,
     path::Path,
+    time::{Duration, Instant},
 };
+
+/// How long reading a file out of a commit may take.
+const SHOW_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Lines shown per request, nearest the hunk first.
 pub(crate) const EXPAND_LINES: u32 = 200;
@@ -87,22 +92,46 @@ pub(super) fn grown_header(header: &str, added: u32) -> Option<String> {
     ))
 }
 
-/// Lines `range` of the working tree's `path` in `checkout`, numbered from
-/// one. Blocking. A link is never followed out of the checkout.
-pub(crate) fn read_lines(checkout: &str, path: &str, range: Range<u32>) -> Option<Vec<String>> {
+/// Lines `range` of `path` in `checkout`, numbered from one: as it is in
+/// `commit`, else in the working tree. Blocking. A link is never followed
+/// out of the checkout.
+pub(crate) fn read_lines(
+    checkout: &str,
+    commit: Option<&str>,
+    path: &str,
+    range: Range<u32>,
+) -> Option<Vec<String>> {
     if !inside(path) {
         return None;
+    }
+    if let Some(commit) = commit {
+        let blob = crate::git::git_bytes(
+            checkout,
+            &["cat-file", "blob", &format!("{commit}:{path}")],
+            "read a file in the commit",
+            Instant::now() + SHOW_TIMEOUT,
+            &|| false,
+            MAX_CONTEXT_BYTES as usize,
+        )
+        .ok()?;
+        return numbered(blob.as_slice(), range);
     }
     let full = Path::new(checkout).join(path);
     let metadata = std::fs::symlink_metadata(&full).ok()?;
     if !metadata.is_file() {
         return None;
     }
-    let reader = BufReader::new(std::fs::File::open(full).ok()?.take(MAX_CONTEXT_BYTES));
+    numbered(
+        BufReader::new(std::fs::File::open(full).ok()?.take(MAX_CONTEXT_BYTES)),
+        range,
+    )
+}
+
+/// Lines `range` of what `reader` reads, numbered from one.
+fn numbered(mut reader: impl BufRead, range: Range<u32>) -> Option<Vec<String>> {
     let mut lines = Vec::new();
     let mut buffer = Vec::new();
     let mut number = 0_u32;
-    let mut reader = reader;
     while number + 1 < range.end {
         buffer.clear();
         if reader.read_until(b'\n', &mut buffer).ok()? == 0 {

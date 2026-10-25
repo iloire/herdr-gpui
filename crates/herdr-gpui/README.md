@@ -2273,8 +2273,10 @@ window at once, and `herdr-gpui ui panel NAME` shows a section.
   colours and changed words marked as a review marks them, read again when
   the file changes; the review icon on its row, or **Open in review** under
   the diff, opens the checkout's review tab at that file, in the workspace
-  open in the checkout or else the one in use. All counts are as of the last fetch; nothing contacts a
-  remote. Dirty checkouts come first, then unpushed, unmerged, and behind.
+  open in the checkout or else the one in use. Clicking a commit opens it in
+  a review tab of its own (see [Reviewing a commit](#reviewing-a-commit)),
+  even in a detached checkout; right-clicking it copies its full name. All
+  counts are as of the last fetch; nothing contacts a remote. Dirty checkouts come first, then unpushed, unmerged, and behind.
   **Needs attention**, the default, folds clean checkouts away; **All** lists
   them. Clicking a checkout opens the workspace open in it. It reads every 15
   seconds while shown and every two minutes otherwise, so the icon's count of
@@ -2985,6 +2987,15 @@ the titlebar's Git menu where its button would.
   note always shows the notes, and the notes icon counts the unsent ones.
   Shown in a narrow group, each panel keeps to 30% of the review.
 
+- <a id="reviewing-a-commit"></a>A commit clicked in the Changes section
+  opens in a review tab titled **Commit · abc1234**, showing what that
+  commit changed against its first parent (everything it holds, for a root
+  commit), with its subject and author in the header in place of the scope
+  switch. Its lines carry the numbers they had in the commit, the lines
+  shown above a hunk come from the commit too, and notes tell the agent
+  which commit they count in. It is read once: the checkout may change or
+  switch branch since without affecting it. Clicking the same commit again
+  brings back its tab.
 - **Uncommitted** shows what is not committed yet (`git diff HEAD`).
   **Branch** shows everything the branch's pull request will hold: the
   working tree against where the branch left its base, so its commits and

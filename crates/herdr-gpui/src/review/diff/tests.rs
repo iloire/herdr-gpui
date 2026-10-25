@@ -330,6 +330,7 @@ fn untracked_links_and_binaries_are_not_read() {
 }
 
 mod branch;
+mod commit;
 mod large;
 mod pick_base;
 mod split;

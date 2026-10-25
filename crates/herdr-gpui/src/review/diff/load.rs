@@ -2,9 +2,9 @@
 //! at a time. Everything here runs Git or reads files, so it belongs on a
 //! background thread.
 use super::{
-    Body, Diff, FileDiff, Lines, Scope, Status,
+    Body, Diff, FileDiff, Lines, Scope, Status, Summary,
     budget::{self, ASKED_OUTPUT, AUTO_FILE_BYTES, BATCH_OUTPUT, MAX_UNTRACKED},
-    lockfile,
+    commit, lockfile,
     parse::parse,
 };
 use crate::pull_request::Input;
@@ -31,6 +31,8 @@ const ATTRIBUTE_FILES: usize = 10_000;
 pub(crate) struct Source {
     pub checkout: String,
     revision: String,
+    /// The commit the diff ends at; none for the working tree.
+    target: Option<String>,
     /// Changes in whitespace alone are left out.
     whitespace: bool,
 }
@@ -41,8 +43,19 @@ impl Source {
         Self {
             checkout: checkout.into(),
             revision: "HEAD".into(),
+            target: None,
             whitespace: false,
         }
+    }
+
+    /// The commit the diff ends at, when it does not end at the working tree.
+    pub(crate) fn target(&self) -> Option<&str> {
+        self.target.as_deref()
+    }
+
+    /// The revisions `git diff` compares, as its arguments.
+    fn revisions(&self) -> impl Iterator<Item = &str> {
+        std::iter::once(self.revision.as_str()).chain(self.target())
     }
 }
 
@@ -53,6 +66,8 @@ pub(crate) struct Loaded {
     pub scope: Scope,
     /// The ref the branch is compared with, for `Scope::Branch`.
     pub base: Option<String>,
+    /// What the commit says of itself, for `Scope::Commit`.
+    pub summary: Option<Summary>,
     pub diff: Diff,
 }
 
@@ -81,6 +96,7 @@ impl Loaded {
             source: Source::local("/work/repo"),
             scope: Scope::Uncommitted,
             base: None,
+            summary: None,
             diff,
         }
     }
@@ -256,8 +272,14 @@ pub(crate) fn load(
     whitespace: bool,
 ) -> crate::Result<Loaded> {
     let deadline = Instant::now() + LOAD_TIMEOUT;
-    let checkout = crate::pull_request::local_checkout(input, deadline, &|| false)?;
-    let (base, revision, before) = match scope {
+    let checkout = match &scope {
+        Scope::Commit(_) => commit::checkout(input, deadline)?,
+        Scope::Uncommitted | Scope::Branch => {
+            crate::pull_request::local_checkout(input, deadline, &|| false)?
+        }
+    };
+    let (mut summary, mut target) = (None, None);
+    let (base, revision, before) = match &scope {
         Scope::Uncommitted => (None, "HEAD".to_owned(), "HEAD".to_owned()),
         Scope::Branch => {
             let (label, commit) = branch_base(&checkout, base, base_hint, deadline)?;
@@ -265,10 +287,18 @@ pub(crate) fn load(
             let before = format!("{label} at {short}");
             (Some(label), commit, before)
         }
+        Scope::Commit(commit) => {
+            let (said, parent) = commit::read(&checkout, commit, deadline)?;
+            summary = Some(said);
+            target = Some(commit.as_str().to_owned());
+            let short: String = parent.chars().take(7).collect();
+            (None, parent, short)
+        }
     };
     let source = Source {
         checkout,
         revision,
+        target,
         whitespace,
     };
     let listing = |format: &'static str, operation| {
@@ -285,7 +315,8 @@ pub(crate) fn load(
         if source.whitespace {
             args.push("--ignore-all-space");
         }
-        args.extend([source.revision.as_str(), "--"]);
+        args.extend(source.revisions());
+        args.push("--");
         list(&source.checkout, &args, operation)
     };
     let counted = budget::parse_numstat(&listing("--numstat", "count working tree changes")?);
@@ -294,6 +325,9 @@ pub(crate) fn load(
             .into_iter()
             .collect();
     let root = Path::new(&source.checkout);
+    // A commit's files are sized by their lines alone: the working tree
+    // holds other versions of them.
+    let on_disk = |name: &str| source.target.is_none().then(|| size(root, name)).flatten();
     let mut files: Vec<FileDiff> = counted
         .into_iter()
         .map(|counted| {
@@ -311,7 +345,7 @@ pub(crate) fn load(
                 .map(|removed| removed.min(u32::MAX.into()) as u32);
             file.body = if counted.binary() {
                 Body::Binary
-            } else if budget::too_large(counted.lines(), size(root, &counted.path)) {
+            } else if budget::too_large(counted.lines(), on_disk(&counted.path)) {
                 Body::Large
             } else {
                 Body::Pending
@@ -319,11 +353,15 @@ pub(crate) fn load(
             file
         })
         .collect();
-    let untracked = list(
-        &source.checkout,
-        &["ls-files", "--others", "--exclude-standard", "-z"],
-        "list untracked files",
-    )?;
+    // Untracked files belong to the working tree, never to a commit.
+    let untracked = match source.target {
+        Some(_) => String::new(),
+        None => list(
+            &source.checkout,
+            &["ls-files", "--others", "--exclude-standard", "-z"],
+            "list untracked files",
+        )?,
+    };
     for name in untracked
         .split('\0')
         .filter(|name| inside(name))
@@ -348,6 +386,7 @@ pub(crate) fn load(
         source,
         scope,
         base,
+        summary,
         diff: Diff { files, before },
     })
 }
@@ -514,7 +553,8 @@ fn diff_text(source: &Source, files: &[&Request], limit: usize) -> crate::Result
     if source.whitespace {
         args.push("--ignore-all-space".into());
     }
-    args.extend([source.revision.clone(), "--".into()]);
+    args.extend(source.revisions().map(str::to_owned));
+    args.push("--".into());
     for file in files {
         args.push(budget::literal(&file.git_path));
         // A rename is only found with both its names.

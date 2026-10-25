@@ -311,7 +311,7 @@ impl HerdrWindow {
         let (request, checkout, scope, base, whitespace) = (
             review.request,
             review.checkout.clone(),
-            review.scope,
+            review.scope.clone(),
             review.base.clone(),
             review.ignore_whitespace,
         );
@@ -349,11 +349,12 @@ impl HerdrWindow {
     }
 
     /// Shows uncommitted changes or the whole branch; queued notes stay.
+    /// A commit's review stays on its commit, which its tab names.
     pub(crate) fn set_review_scope(&mut self, id: TabId, scope: Scope, cx: &mut Context<Self>) {
         let Some(review) = self.reviews.get_mut(&id) else {
             return;
         };
-        if review.scope == scope {
+        if review.scope == scope || matches!(review.scope, Scope::Commit(_)) {
             return;
         }
         review.scope = scope;
@@ -370,14 +371,15 @@ impl HerdrWindow {
     }
 
     /// Reads a review again when the checkout's changes moved since it
-    /// last read them, unless a note is being written on a line.
+    /// last read them, unless a note is being written on a line. A commit
+    /// never changes, so its review is left alone.
     pub(crate) fn follow_review_changes(&mut self, cx: &mut Context<Self>) {
         let (Some(tracked), Some(status)) = (self.git.tracked().cloned(), self.git.status()) else {
             return;
         };
         let mut moved = Vec::new();
         for (id, review) in &mut self.reviews {
-            if review.checkout != tracked {
+            if review.checkout != tracked || matches!(review.scope, Scope::Commit(_)) {
                 continue;
             }
             match review.seen {
@@ -420,13 +422,16 @@ impl HerdrWindow {
             store.open(
                 scope,
                 "w0",
-                Some(crate::browser::Location::Review { checkout }),
+                Some(crate::browser::Location::Review {
+                    checkout,
+                    commit: None,
+                }),
                 origin,
             )
         })
         .expect("a tab");
         let mut review = self.new_review(id, input_checkout, agent, cx);
-        review.scope = loaded.scope;
+        review.scope = loaded.scope.clone();
         review.request = 1;
         review.set_loaded(loaded);
         review.refresh_shown();
@@ -616,7 +621,11 @@ impl HerdrWindow {
             .iter()
             .map(|&index| review.notes[index].clone())
             .collect();
-        let text = notes::prompt(&loaded.source.checkout, &round);
+        let commit = match &loaded.scope {
+            Scope::Commit(commit) => Some(commit.short()),
+            Scope::Uncommitted | Scope::Branch => None,
+        };
+        let text = notes::prompt(&loaded.source.checkout, commit, &round);
         let pane = review.agent.as_ref().map(|agent| agent.pane_id.clone());
         Some((text, indexes, pane))
     }
@@ -714,6 +723,7 @@ impl HerdrWindow {
                 .child(match loaded.scope {
                     Scope::Uncommitted => "No uncommitted changes",
                     Scope::Branch => "No changes on this branch",
+                    Scope::Commit(_) => "This commit changes no files",
                 })
                 .into_any_element(),
             State::Loaded(_) => div()

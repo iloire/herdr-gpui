@@ -26,30 +26,7 @@ impl HerdrWindow {
             .border_b_1()
             .border_color(rgb(theme.active))
             .child(self.render_review_panel_toggle(id, review, panels::Panel::Files, cx))
-            .child(
-                div()
-                    .flex_none()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child("Review changes"),
-            )
-            .child(self.render_review_scope(id, review.scope, cx))
-            .child(
-                div()
-                    .debug_selector(|| "review-against".into())
-                    .flex_1()
-                    .min_w_0()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .text_color(rgb(theme.muted))
-                    .child(div().min_w_0().truncate().child(match review.scope {
-                        Scope::Branch => format!("{} against", review.checkout.branch),
-                        Scope::Uncommitted => review.checkout.branch.clone(),
-                    }))
-                    .when(review.scope == Scope::Branch, |against| {
-                        against.child(self.render_review_base(id, review, cx))
-                    }),
-            )
+            .children(self.render_review_subject(id, review, cx))
             .when(review.batch_out, |header| {
                 header.child(
                     div()
@@ -167,10 +144,69 @@ impl HerdrWindow {
             ))
     }
 
-    fn render_review_scope(&self, id: TabId, current: Scope, cx: &mut Context<Self>) -> Div {
+    /// What the review shows: the scope's switch and its branch, or the
+    /// commit, which a commit's review keeps.
+    fn render_review_subject(
+        &self,
+        id: TabId,
+        review: &Review,
+        cx: &mut Context<Self>,
+    ) -> [Div; 3] {
+        let theme = &self.theme;
+        let title = |title: &'static str| {
+            div()
+                .flex_none()
+                .font_weight(FontWeight::SEMIBOLD)
+                .child(title)
+        };
+        let details = div()
+            .debug_selector(|| "review-against".into())
+            .flex_1()
+            .min_w_0()
+            .flex()
+            .items_center()
+            .gap_2()
+            .text_color(rgb(theme.muted));
+        let Scope::Commit(commit) = &review.scope else {
+            return [
+                title("Review changes"),
+                self.render_review_scope(id, &review.scope, cx),
+                details
+                    .child(div().min_w_0().truncate().child(match review.scope {
+                        Scope::Branch => format!("{} against", review.checkout.branch),
+                        _ => review.checkout.branch.clone(),
+                    }))
+                    .when(review.scope == Scope::Branch, |against| {
+                        against.child(self.render_review_base(id, review, cx))
+                    }),
+            ];
+        };
+        let summary = review.loaded().and_then(|loaded| loaded.summary.as_ref());
+        [
+            title("Commit"),
+            div()
+                .debug_selector(|| "review-commit".into())
+                .flex_none()
+                .text_color(rgb(theme.foreground))
+                .child(commit.short().to_owned()),
+            details.when_some(summary, |details, summary| {
+                details
+                    .child(
+                        div()
+                            .min_w_0()
+                            .truncate()
+                            .text_color(rgb(theme.subtext()))
+                            .child(summary.subject.clone()),
+                    )
+                    .child(div().flex_none().child(summary.author.clone()))
+            }),
+        ]
+    }
+
+    fn render_review_scope(&self, id: TabId, current: &Scope, cx: &mut Context<Self>) -> Div {
         let theme = &self.theme;
         let segment = |name: &'static str, label: &'static str, scope: Scope| {
-            let chosen = scope == current;
+            let chosen = scope == *current;
             div()
                 .id(name)
                 .debug_selector(move || name.into())
@@ -190,7 +226,7 @@ impl HerdrWindow {
                 .child(label)
                 .on_click(cx.listener(move |this, _, _, cx| {
                     cx.stop_propagation();
-                    this.set_review_scope(id, scope, cx);
+                    this.set_review_scope(id, scope.clone(), cx);
                 }))
         };
         div()

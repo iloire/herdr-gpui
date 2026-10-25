@@ -4,11 +4,12 @@
 //! `origin`, the pane of the agent its notes go to. The review's state lives
 //! in the window: made when the tab is opened or first seen after a restart,
 //! and read off the UI thread from the window's tick, never from drawing.
-use super::{Agent, Layout, Review, State, agent_in, pick_agent, rows, search};
+use super::{Agent, Layout, Review, Scope, State, agent_in, pick_agent, rows, search};
 use crate::{
     HerdrWindow,
     browser::{Location, ReviewCheckout, Slot, Store, Tab, TabId},
     pull_request::Input,
+    review::CommitId,
     search_input::{self, SearchInput},
     window::Flash,
 };
@@ -47,6 +48,7 @@ impl HerdrWindow {
         let agent = self.live.snapshot.as_deref().and_then(pick_agent);
         self.open_review_of(
             checkout,
+            None,
             self.selected_endpoint,
             workspace,
             agent,
@@ -56,14 +58,16 @@ impl HerdrWindow {
         );
     }
 
-    /// Opens a review tab on `checkout` in workspace `workspace` of
-    /// endpoint `endpoint`, or brings back the one already open there, and
-    /// reads its changes again, showing `file` first when given. Another
-    /// workspace than the shown one is switched to. Notes go to `agent`.
+    /// Opens a review tab on `checkout`'s uncommitted changes, or on
+    /// `commit` of it, in workspace `workspace` of endpoint `endpoint`, or
+    /// brings back the one already open there, and reads its changes again,
+    /// showing `file` first when given. Another workspace than the shown one
+    /// is switched to. Notes go to `agent`.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn open_review_of(
         &mut self,
         checkout: ReviewCheckout,
+        commit: Option<CommitId>,
         endpoint: usize,
         workspace: String,
         agent: Option<Agent>,
@@ -74,23 +78,17 @@ impl HerdrWindow {
         let Some(scope) = self.endpoints.get(endpoint).map(crate::browser::scope) else {
             return;
         };
+        let location = Location::Review { checkout, commit };
         let existing = cx.try_global::<Store>().and_then(|store| {
             store
                 .in_workspace(&scope, &workspace)
-                .find(|tab| {
-                    matches!(&tab.location, Some(Location::Review { checkout: open }) if *open == checkout)
-                })
+                .find(|tab| tab.location.as_ref() == Some(&location))
                 .map(|tab| tab.id)
         });
         let origin = agent.as_ref().map(|agent| agent.pane_id.clone());
         let opened = existing.or_else(|| {
             Store::update(cx, |store| {
-                store.open(
-                    scope,
-                    &workspace,
-                    Some(Location::Review { checkout }),
-                    origin,
-                )
+                store.open(scope, &workspace, Some(location), origin)
             })
         });
         let Some(id) = opened else {
@@ -119,14 +117,17 @@ impl HerdrWindow {
             }
             return false;
         }
-        let Some(Location::Review { checkout }) = cx
+        let Some(Location::Review { checkout, commit }) = cx
             .try_global::<Store>()
             .and_then(|store| store.get(id))
             .and_then(|tab| tab.location.clone())
         else {
             return false;
         };
-        let review = self.new_review(id, Input::from(&checkout), agent, cx);
+        let mut review = self.new_review(id, Input::from(&checkout), agent, cx);
+        if let Some(commit) = commit {
+            review.scope = Scope::Commit(commit);
+        }
         self.reviews.insert(id, review);
         true
     }
@@ -280,7 +281,7 @@ impl HerdrWindow {
         ];
         Review {
             checkout,
-            scope: super::Scope::default(),
+            scope: Scope::default(),
             layout: Layout::default(),
             ignore_whitespace: false,
             base: None,

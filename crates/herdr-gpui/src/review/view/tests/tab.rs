@@ -23,6 +23,7 @@ fn a_restored_review_tab_gets_its_state_and_a_closed_one_loses_it(cx: &mut gpui:
                 "w0",
                 Some(Location::Review {
                     checkout: checkout(),
+                    commit: None,
                 }),
                 None,
             )
@@ -93,7 +94,11 @@ fn a_review_saved_by_its_directory_alone_is_read_back() {
         let again: Location =
             serde_json::from_str(&serde_json::to_string(&location).unwrap()).unwrap();
         assert_eq!(again, location, "{text}");
-        let Location::Review { checkout } = location else {
+        let Location::Review {
+            checkout,
+            commit: None,
+        } = location
+        else {
             panic!("not a review: {text}");
         };
         assert_eq!(

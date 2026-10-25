@@ -104,11 +104,19 @@ pub struct FileChange {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Commit {
+    /// The full object name; [`Commit::short`] is how it is shown.
     pub sha: String,
     pub subject: String,
     pub author: String,
     /// Committer time, in seconds since the Unix epoch.
     pub time: i64,
+}
+
+impl Commit {
+    /// The object name abbreviated as Git does by default.
+    pub fn short(&self) -> &str {
+        self.sha.get(..7).unwrap_or(&self.sha)
+    }
 }
 
 /// The checkout a directory sits in: its top level and the common
@@ -238,7 +246,7 @@ pub fn read(
                 "log",
                 &format!("--max-count={MAX_COMMITS}"),
                 "-z",
-                "--format=%h%x1f%ct%x1f%an%x1f%s",
+                "--format=%H%x1f%ct%x1f%an%x1f%s",
             ],
             "read recent commits",
             deadline,

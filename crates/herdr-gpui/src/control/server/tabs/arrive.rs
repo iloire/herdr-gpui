@@ -339,7 +339,7 @@ pub(super) fn review(
                 workspace,
                 "the review",
                 cx,
-                |location| matches!(location, Location::Review { checkout: open } if *open == checkout),
+                |location| matches!(location, Location::Review { checkout: open, commit: None } if *open == checkout),
             )
         },
     );

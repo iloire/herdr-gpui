@@ -204,11 +204,12 @@ impl HerdrWindow {
         };
         let range = gap.next();
         let (checkout, path) = (loaded.source.checkout.clone(), entry.git_path().to_owned());
+        let commit = loaded.source.target().map(str::to_owned);
         let request = review.request;
         review.expanding.insert((file, header));
         let reading = cx.background_executor().spawn({
             let range = range.clone();
-            async move { diff::read_lines(&checkout, &path, range) }
+            async move { diff::read_lines(&checkout, commit.as_deref(), &path, range) }
         });
         cx.spawn(async move |this, cx| {
             let texts = reading.await;

@@ -1,10 +1,11 @@
 //! Drawing the Changes section from the last read: a card per repository,
 //! and in it each checkout's branch, its uncommitted files (`files`), and
-//! its latest commits. A checkout's header opens the workspace open in it, if any.
+//! its latest commits. A checkout's header opens the workspace open in it, if any;
+//! a commit opens in a review tab of its own, and a right click copies its name.
 //! Needs attention, the default, folds away the clean checkouts.
 
 use super::{Rank, Repo, Shown};
-use crate::HerdrWindow;
+use crate::{HerdrWindow, window::Flash};
 use gpui::{prelude::*, *};
 use herdr_vcs::changes::Commit;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -410,17 +411,30 @@ impl HerdrWindow {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
+        let key = format!("{repo}-{position}");
         for commit in &checkout.commits {
-            block = block.child(self.changes_commit(commit, now));
+            block = block.child(self.changes_commit(&key, shown, commit, now, cx));
         }
         block
     }
 
-    fn changes_commit(&self, commit: &Commit, now: u64) -> Div {
+    fn changes_commit(
+        &self,
+        key: &str,
+        shown: &Shown,
+        commit: &Commit,
+        now: u64,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
         let theme = &self.theme;
         let small = px(self.config.ui.size - 1.);
         let elapsed = now.saturating_sub(u64::try_from(commit.time).unwrap_or_default());
+        let (opened, sha) = ((shown.clone(), commit.clone()), commit.sha.clone());
         div()
+            .id(SharedString::from(format!(
+                "changes-commit-{key}-{}",
+                commit.sha
+            )))
             .debug_selector(|| "changes-commit".into())
             .px_3()
             .pl(px(32.))
@@ -429,11 +443,25 @@ impl HerdrWindow {
             .items_center()
             .gap_2()
             .text_size(small)
+            .cursor_pointer()
+            .hover(|style| style.bg(rgb(theme.active)))
+            .on_click(cx.listener(move |this, _, window, cx| {
+                let (shown, commit) = &opened;
+                this.review_changes_commit(shown, commit, window, cx);
+            }))
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |this, _, _, cx| {
+                    cx.stop_propagation();
+                    cx.write_to_clipboard(ClipboardItem::new_string(sha.clone()));
+                    this.show_flash(Flash::success("Commit name copied"), cx);
+                }),
+            )
             .child(
                 div()
                     .flex_none()
                     .text_color(rgb(theme.muted))
-                    .child(commit.sha.clone()),
+                    .child(commit.short().to_owned()),
             )
             .child(
                 div()

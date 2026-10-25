@@ -82,7 +82,7 @@ fn review(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) -> (Input, Vec
     let checkout = cx.update(|_, cx| {
         cx.try_global::<crate::browser::Store>().and_then(|store| {
             store.tabs().find_map(|tab| match &tab.location {
-                Some(Location::Review { checkout }) => Some(Input::from(checkout)),
+                Some(Location::Review { checkout, .. }) => Some(Input::from(checkout)),
                 _ => None,
             })
         })

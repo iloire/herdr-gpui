@@ -59,9 +59,12 @@ pub(crate) enum Location {
     Local {
         file: LocalFile,
     },
-    /// A review of a checkout's changes, drawn by the app, never a page.
+    /// A review of a checkout's changes, or of one of its commits, drawn
+    /// by the app, never a page.
     Review {
         checkout: ReviewCheckout,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        commit: Option<crate::review::CommitId>,
     },
     /// A repository's issues, pull requests, and agent runs, drawn by the
     /// app, never a page.
@@ -226,7 +229,11 @@ impl Location {
         match self {
             Self::Web { url } => url.as_str().to_owned(),
             Self::Local { file } => file.path().display().to_string(),
-            Self::Review { checkout } => format!("Review of {}", checkout.branch),
+            Self::Review {
+                commit: Some(commit),
+                ..
+            } => format!("Commit {}", commit.short()),
+            Self::Review { checkout, .. } => format!("Review of {}", checkout.branch),
             Self::Code { file } => file.path.clone(),
             Self::Orchestrator { repo } => format!("Orchestrator of {}", repo.name()),
             Self::Devices => "Devices overview".to_owned(),
@@ -238,7 +245,11 @@ impl Location {
         match self {
             Self::Web { url } => url.host().to_owned(),
             Self::Local { file } => file.entry.rsplit('/').next().unwrap_or_default().to_owned(),
-            Self::Review { checkout } => format!("Review \u{00b7} {}", checkout.branch),
+            Self::Review {
+                commit: Some(commit),
+                ..
+            } => format!("Commit \u{00b7} {}", commit.short()),
+            Self::Review { checkout, .. } => format!("Review \u{00b7} {}", checkout.branch),
             Self::Code { file } => file.name().to_owned(),
             Self::Orchestrator { repo } => format!("Orchestrator \u{00b7} {}", repo.name()),
             Self::Devices => "Devices".to_owned(),

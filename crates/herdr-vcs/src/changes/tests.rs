@@ -140,7 +140,8 @@ impl Repo {
         self.directory.path()
     }
 
-    fn git(&self, args: &[&str]) {
+    /// Runs Git in the repository; its output, trimmed.
+    fn git(&self, args: &[&str]) -> String {
         let result = Command::new("git")
             .arg("-C")
             .arg(self.path())
@@ -162,6 +163,7 @@ impl Repo {
             "{}",
             String::from_utf8_lossy(&result.stderr)
         );
+        String::from_utf8_lossy(&result.stdout).trim().to_owned()
     }
 
     fn write(&self, name: &str, text: &str) {
@@ -258,6 +260,10 @@ fn a_clean_checkout_without_upstream_is_not_dirty() {
     assert_eq!(checkout.upstream, None);
     assert_eq!((checkout.ahead, checkout.behind), (0, 0));
     assert_eq!(checkout.commits.len(), 1);
+    // The full name, so a review opened from it never turns ambiguous.
+    let commit = &checkout.commits[0];
+    assert_eq!(commit.sha, repo.git(&["rev-parse", "HEAD"]));
+    assert_eq!(commit.short(), &commit.sha[..7]);
 }
 
 #[test]

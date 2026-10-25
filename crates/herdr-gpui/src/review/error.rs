@@ -3,6 +3,8 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     // keep-sorted start
+    #[error("Not a commit's full name.")]
+    InvalidCommit,
     #[error(
         "No base branch to compare with: neither the pull request's base nor origin/HEAD, main, or master exists locally. Pick one with the base button above."
     )]

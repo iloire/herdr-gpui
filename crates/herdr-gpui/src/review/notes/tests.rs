@@ -28,7 +28,7 @@ fn the_prompt_places_and_quotes_each_note() {
         )
         .unwrap(),
     ];
-    let text = prompt("/work/repo", &notes);
+    let text = prompt("/work/repo", None, &notes);
     assert!(text.starts_with("Review notes on your changes in /work/repo, from Herdr UI.\n"));
     assert!(text.contains(
         "\n1. On `src/lib.rs:42` (added line)\n   Code: `` let x = `y`; ``\n   Note: Use a constant here\n"
@@ -49,7 +49,7 @@ fn the_prompt_places_and_quotes_each_note() {
     )
     .unwrap();
     assert!(
-        prompt("/work/repo", &[branch])
+        prompt("/work/repo", None, &[branch])
             .contains("(removed line, numbered as in origin/main at 1a2b3c4)")
     );
     assert!(text.contains("\n3. On `README.md` as a whole\n   Note: Document the flag\n"));

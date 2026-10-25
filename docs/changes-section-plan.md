@@ -51,7 +51,7 @@ herdr-gpui  ·  local                                   ↻ 12s ago
 - Sorted by **what needs attention**: dirty, then ahead of upstream (unpushed),
   then behind, then clean. Clean repos collapse to one line.
 - Clicking a file opens the Review tab for that checkout, scrolled to the file.
-  Clicking a commit copies its SHA (v1). Clicking the checkout row focuses its workspace.
+  ~~Clicking a commit copies its SHA (v1).~~ Clicking a commit opens it in a review tab; a right click copies its SHA ✅. Clicking the checkout row focuses its workspace.
 - Filters (pills like Security's): `All · Dirty · Unpushed` plus the search field.
 
 ### 2. Data: one read per checkout, off the UI thread

@@ -10,6 +10,7 @@ use std::{collections::HashMap, ops::Range, sync::Arc};
 
 mod bases;
 mod budget;
+mod commit;
 mod context;
 mod load;
 mod parse;
@@ -18,6 +19,7 @@ mod words;
 
 pub(crate) use bases::{BaseChoice, bases};
 pub(crate) use budget::{EAGER_LINES, batch};
+pub(crate) use commit::{CommitId, Summary};
 pub(crate) use context::read_lines;
 pub(crate) use load::{Loaded, Request, bodies, load, short_ref};
 pub(crate) use peek::{Peeked, peek};
@@ -500,9 +502,10 @@ pub(crate) struct Diff {
     pub before: String,
 }
 
-/// Which changes a review shows. Either way the diff ends at the working
-/// tree, so added and unchanged lines carry the numbers the files have now.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// Which changes a review shows. Uncommitted and branch reviews end at the
+/// working tree, so added and unchanged lines carry the numbers the files
+/// have now; a commit's carry the numbers they had in it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) enum Scope {
     /// What is not committed yet: against HEAD.
     #[default]
@@ -510,6 +513,8 @@ pub(crate) enum Scope {
     /// Everything the branch adds, as its pull request will: against the
     /// merge base with the base branch, uncommitted work included.
     Branch,
+    /// One commit on its own: against its first parent, ending at it.
+    Commit(CommitId),
 }
 
 /// Which version of a file a line number counts in.

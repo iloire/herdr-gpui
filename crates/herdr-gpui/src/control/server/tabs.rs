@@ -74,7 +74,7 @@ fn location(tab: &Tab) -> Option<String> {
     Some(match tab.location.as_ref()? {
         Location::Web { url } => url.as_str().to_owned(),
         Location::Local { file } => file.path().display().to_string(),
-        Location::Review { checkout } => checkout
+        Location::Review { checkout, .. } => checkout
             .checkout
             .clone()
             .or_else(|| checkout.repo_key.clone())?,
