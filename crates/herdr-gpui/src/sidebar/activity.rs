@@ -7,9 +7,8 @@
 //! requests, and Issues the focused
 //! workspace's orchestrator on that list (see `orchestrator::section`),
 //! Security the Dependabot alerts of every repository (`crate::security`),
-//! listed only once GitHub reports them on for one, Automations the
-//! `herdr-automate` scripts and runs of every host (`crate::automations`),
-//! and Usage the plan limits of every host (`crate::usage::section`).
+//! listed only once GitHub reports them on for one, and Automations the
+//! `herdr-automate` scripts and runs of every host (`crate::automations`).
 //! `[sidebar] activity_bar = false` turns the bar off, and `[sidebar]
 //! changes`, `pull_requests`, `issues`, `security`, or `automations = false`
 //! leaves that section off it. With the bar on, the
@@ -55,7 +54,6 @@ fn label(panel: ActivityPanel) -> &'static str {
         ActivityPanel::Issues => "Issues",
         ActivityPanel::Security => "Security",
         ActivityPanel::Automations => "Automations",
-        ActivityPanel::Usage => "Usage",
     }
 }
 
@@ -68,7 +66,6 @@ fn icon(panel: ActivityPanel) -> &'static str {
         ActivityPanel::Issues => "icons/issue.svg",
         ActivityPanel::Security => "icons/shield.svg",
         ActivityPanel::Automations => "icons/automations.svg",
-        ActivityPanel::Usage => "icons/chart.svg",
     }
 }
 
@@ -93,7 +90,7 @@ pub(crate) struct Activity {
     /// The section the window left for a pane it opened, which Back
     /// returns to before walking the focus trail.
     pub(crate) return_to: Option<ActivityPanel>,
-    /// What holds the keyboard while Overview or Usage is shown, so typing
+    /// What holds the keyboard while Overview or another full-body section is shown, so typing
     /// never reaches a terminal the section hides.
     pub(crate) section_focus: Option<FocusHandle>,
     /// Each orchestrator view's lists and live agents as last counted, by
@@ -320,8 +317,7 @@ impl HerdrWindow {
                 ActivityPanel::Overview
                 | ActivityPanel::Changes
                 | ActivityPanel::Security
-                | ActivityPanel::Automations
-                | ActivityPanel::Usage,
+                | ActivityPanel::Automations,
             ) => {
                 let focus = self
                     .activity
@@ -348,7 +344,6 @@ impl HerdrWindow {
             ActivityPanel::Changes => self.render_changes_section(cx),
             ActivityPanel::Security => self.render_security_section(window, cx),
             ActivityPanel::Automations => self.render_automations_section(cx),
-            ActivityPanel::Usage => self.render_usage_section(cx),
             ActivityPanel::PullRequests | ActivityPanel::Issues => {
                 return self.render_orchestrator_section();
             }
@@ -661,6 +656,5 @@ fn panel_selector(panel: ActivityPanel) -> &'static str {
         ActivityPanel::Issues => "activity-issues",
         ActivityPanel::Security => "activity-security",
         ActivityPanel::Automations => "activity-automations",
-        ActivityPanel::Usage => "activity-usage",
     }
 }

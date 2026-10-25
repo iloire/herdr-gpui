@@ -143,7 +143,6 @@ fn counts_keep_their_newest_item_time() {
     // An item without times counts but cannot be told new.
     assert_eq!(counts.of(ActivityPanel::PullRequests), Some(1));
     assert_eq!(counts.latest(ActivityPanel::PullRequests), None);
-    assert_eq!(counts.latest(ActivityPanel::Usage), None);
 }
 
 #[test]

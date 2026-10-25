@@ -14,7 +14,6 @@ pub enum ActivityPanel {
     Issues,
     Security,
     Automations,
-    Usage,
 }
 
 impl ActivityPanel {
@@ -26,7 +25,6 @@ impl ActivityPanel {
         Self::Issues,
         Self::Security,
         Self::Automations,
-        Self::Usage,
     ];
 
     /// The name the CLI and the preferences file use.
@@ -39,7 +37,6 @@ impl ActivityPanel {
             Self::Issues => "issues",
             Self::Security => "security",
             Self::Automations => "automations",
-            Self::Usage => "usage",
         }
     }
 

@@ -1,4 +1,4 @@
-//! Plan usage in the status bar, its panel, and the Usage section. Reading
+//! Plan usage in the status bar and its panel. Reading
 //! it is `herdr-usage`'s; this draws it, keeps the Keychain grants the user
 //! gave, and embeds the provider logos.
 
@@ -7,7 +7,6 @@ mod details;
 mod icons;
 mod panel;
 mod render;
-mod section;
 mod ui;
 
 #[cfg(test)]

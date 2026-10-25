@@ -153,6 +153,8 @@ fn panel_names_round_trip_and_are_unique() {
         assert_eq!(json, format!("\"{}\"", panel.name()));
     }
     assert_eq!(ActivityPanel::parse("dashboard"), None);
+    // The removed Usage section: a stored name falls back to the default.
+    assert_eq!(ActivityPanel::parse("usage"), None);
 }
 
 #[gpui::test]
@@ -161,15 +163,15 @@ fn a_stored_panel_yields_to_one_picked_before_it_loaded(cx: &mut gpui::TestAppCo
     view.update(cx, |view, _| {
         assert_eq!(view.activity.chosen(), None);
         view.activity
-            .restore(Some(ActivityPanel::Usage), &Default::default());
-        assert_eq!(view.activity.panel, ActivityPanel::Usage);
+            .restore(Some(ActivityPanel::Overview), &Default::default());
+        assert_eq!(view.activity.panel, ActivityPanel::Overview);
     });
     let (view, cx) = fixture(cx);
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
             view.show_activity_panel(ActivityPanel::Issues, window, cx);
             view.activity
-                .restore(Some(ActivityPanel::Usage), &Default::default());
+                .restore(Some(ActivityPanel::Overview), &Default::default());
             assert_eq!(view.activity.panel, ActivityPanel::Issues);
             assert_eq!(view.activity.chosen(), Some(ActivityPanel::Issues));
         })

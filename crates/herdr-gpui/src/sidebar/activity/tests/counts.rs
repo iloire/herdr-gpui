@@ -26,5 +26,4 @@ fn counts_open_pull_requests_and_open_issues_once() {
     assert_eq!(counts.of(ActivityPanel::PullRequests), Some(1));
     assert_eq!(counts.of(ActivityPanel::Issues), Some(2));
     assert_eq!(counts.of(ActivityPanel::Workspaces), None);
-    assert_eq!(counts.of(ActivityPanel::Usage), None);
 }

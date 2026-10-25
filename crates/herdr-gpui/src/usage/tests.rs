@@ -9,7 +9,6 @@ use super::{
 mod footer_fit;
 mod icons;
 mod keychain_grants;
-mod section;
 mod status_bar_room;
 
 fn provider(id: &str) -> Provider {
