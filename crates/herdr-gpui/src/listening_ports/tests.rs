@@ -10,6 +10,8 @@ use herdr_client::ConnectTarget;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 #[cfg(unix)]
+mod renamed_listeners;
+#[cfg(unix)]
 mod repeated_scans;
 mod ssh_links;
 mod status_bar;

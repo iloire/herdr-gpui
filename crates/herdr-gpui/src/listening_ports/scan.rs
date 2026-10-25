@@ -2,9 +2,12 @@
 //!
 //! Herdr exports `HERDR_WORKSPACE_ID` into every pane it starts, and a server
 //! launched from a pane inherits it, so a listener's own environment names
-//! its workspace exactly; no process tree or working directory is guessed.
-//! Listeners whose process lacks the variable (system services, containers,
-//! anything started outside Herdr) belong to no workspace and are dropped.
+//! its workspace exactly; no working directory is guessed. A listener whose
+//! own environment lacks the variable takes the nearest of its parents' (up
+//! to four): on macOS `ps -E` reads the environment from the argument area,
+//! which a server that renames its process (`next-server`) overwrites.
+//! Listeners with no such ancestor (system services, containers, anything
+//! started outside Herdr) belong to no workspace and are dropped.
 
 use super::Error;
 use super::tunnel::Key;
@@ -57,13 +60,21 @@ else
 fi
 printf '%s\n' "$herdr_ports"
 for herdr_pid in $(printf '%s\n' "$herdr_ports" | awk '$1 == "L" { print $2 }' | sort -un | head -n 128); do
-    if [ -r "/proc/$herdr_pid/environ" ]; then
-        herdr_env=$(tr '\0' '\n' < "/proc/$herdr_pid/environ")
-    else
-        herdr_env=$(ps -E -ww -o command= -p "$herdr_pid" 2>/dev/null | tr ' ' '\n')
-    fi
-    herdr_workspace=$(printf '%s\n' "$herdr_env" | sed -n 's/^HERDR_WORKSPACE_ID=//p' | head -n 1)
-    herdr_socket=$(printf '%s\n' "$herdr_env" | sed -n 's/^HERDR_SOCKET_PATH=//p' | head -n 1)
+    herdr_env_pid=$herdr_pid
+    herdr_depth=0
+    herdr_workspace=
+    herdr_socket=
+    while [ -z "$herdr_workspace" ] && [ "$herdr_depth" -lt 5 ] && [ "${herdr_env_pid:-0}" -gt 1 ]; do
+        if [ -r "/proc/$herdr_env_pid/environ" ]; then
+            herdr_env=$(tr '\0' '\n' < "/proc/$herdr_env_pid/environ")
+        else
+            herdr_env=$(ps -E -ww -o command= -p "$herdr_env_pid" 2>/dev/null | tr ' ' '\n')
+        fi
+        herdr_workspace=$(printf '%s\n' "$herdr_env" | sed -n 's/^HERDR_WORKSPACE_ID=//p' | head -n 1)
+        herdr_socket=$(printf '%s\n' "$herdr_env" | sed -n 's/^HERDR_SOCKET_PATH=//p' | head -n 1)
+        herdr_env_pid=$(ps -o ppid= -p "$herdr_env_pid" 2>/dev/null | tr -d ' ')
+        herdr_depth=$((herdr_depth + 1))
+    done
     if [ -n "$herdr_workspace" ]; then
         printf 'E %s %s %s\n' "$herdr_pid" "$herdr_workspace" "$herdr_socket"
     fi
