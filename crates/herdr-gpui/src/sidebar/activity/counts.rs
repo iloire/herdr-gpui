@@ -1,6 +1,7 @@
 //! The bar's count bubbles: what needs the user, as the Overview counted it
 //! on the last tick, and from the orchestrator views the window holds, open
-//! pull requests and open issues, the open critical and high Dependabot
+//! pull requests and open issues, the local checkouts with uncommitted
+//! work, the open critical and high Dependabot
 //! alerts, and the automation scripts waiting for approval or after a
 //! failed run. An item two views list, such as one repository open in two
 //! workspaces, counts once. Each count keeps when its newest item last
@@ -15,6 +16,7 @@ use std::collections::HashSet;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) struct Counts {
     needs: Count,
+    changes: Count,
     pull_requests: Count,
     issues: Count,
     security: Count,
@@ -52,6 +54,7 @@ impl Counts {
     fn count(self, panel: ActivityPanel) -> Option<Count> {
         match panel {
             ActivityPanel::Overview => Some(self.needs),
+            ActivityPanel::Changes => Some(self.changes),
             ActivityPanel::Workspaces | ActivityPanel::Usage => None,
             ActivityPanel::PullRequests => Some(self.pull_requests),
             ActivityPanel::Issues => Some(self.issues),
@@ -83,6 +86,10 @@ impl HerdrWindow {
             needs: Count {
                 items: self.overview_needing(),
                 latest: self.overview_needing_since().map(DateTime::from),
+            },
+            changes: Count {
+                items: self.changes.dirty(),
+                latest: None,
             },
             security: Count {
                 items: self.security.urgent(),

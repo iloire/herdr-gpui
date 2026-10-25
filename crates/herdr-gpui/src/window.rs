@@ -136,6 +136,9 @@ pub(crate) struct HerdrWindow {
     pub(crate) browser: crate::browser::Browser,
     pub(crate) catalog: endpoint::Catalog,
     pub(crate) cell_width: f32,
+    /// The activity bar's Changes section: every local checkout's files and
+    /// recent commits.
+    pub(crate) changes: crate::changes::Changes,
     /// Native views of the `herdr-acp` chats in this daemon's panes.
     pub(crate) chats: crate::chat::Chats,
     /// Snapshots of checkouts taken at agent turns, and the dialog listing them.
@@ -660,6 +663,7 @@ impl HerdrWindow {
         }
         self.poll_devices_overview(cx);
         self.poll_overview(cx);
+        self.poll_changes(cx);
         self.poll_security(cx);
         self.poll_automations(cx);
         if self.update_system_load() {

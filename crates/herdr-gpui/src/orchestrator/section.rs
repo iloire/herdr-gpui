@@ -204,6 +204,7 @@ pub(crate) fn list_of(section: ActivityPanel) -> Option<List> {
         ActivityPanel::Issues => Some(List::Issues),
         ActivityPanel::PullRequests => Some(List::PullRequests),
         ActivityPanel::Overview
+        | ActivityPanel::Changes
         | ActivityPanel::Security
         | ActivityPanel::Automations
         | ActivityPanel::Workspaces

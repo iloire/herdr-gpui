@@ -2236,9 +2236,20 @@ window at once, and `herdr-gpui ui panel NAME` shows a section.
   column beside the list shows each host's CPU, memory, agents, and ports;
   each host folds, and the column folds to a strip of load dots. The icon
   counts what needs you.
+- **Changes** shows what every workspace on this machine holds in Git right
+  now, one card per repository with its worktrees together: each checkout's
+  branch with `↑`/`↓` against its upstream (as of the last fetch; nothing
+  contacts a remote), its uncommitted files with a status mark and line
+  counts, and its five latest commits. Checkouts with uncommitted work come
+  first, then unpushed, then behind, then clean. Clicking a checkout opens
+  its workspace. It reads every 10 seconds while shown and every minute
+  otherwise, so the icon's count of checkouts with uncommitted work stays
+  current. Only this machine's own daemon is read, not SSH hosts. Turn it off
+  with `[sidebar] changes = false`.
 - **Pull requests** and **Issues** list every repository the connected hosts'
   workspaces hold (see [Orchestrator](#orchestrator)). Refresh spins while a
-  sync runs.
+  sync runs. `[sidebar] pull_requests = false` or `issues = false` leaves
+  either off the bar.
 - **Usage** shows every host's plan limits, one card per signed-in agent. Only
   the selected host is read; another host shows what was read while it was
   selected.

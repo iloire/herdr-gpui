@@ -20,6 +20,7 @@ mod browser;
 mod bundled;
 mod caffeine;
 mod caption;
+mod changes;
 mod chat;
 mod cli;
 mod close_modal;

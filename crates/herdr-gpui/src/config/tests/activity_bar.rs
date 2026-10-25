@@ -50,3 +50,19 @@ fn automations_are_on_unless_turned_off_and_write_their_key() -> anyhow::Result<
     }
     Ok(())
 }
+
+#[test]
+fn changes_pull_requests_and_issues_are_on_unless_turned_off() -> anyhow::Result<()> {
+    for config in [Config::default(), Config::parse(DEFAULT_CONFIG)?] {
+        let style = &config.sidebar_style;
+        assert!(style.changes && style.pull_requests && style.issues);
+    }
+    let off = Config::parse("[sidebar]\nchanges = false\npull_requests = false\nissues = false")?;
+    let style = &off.sidebar_style;
+    assert!(!style.changes && !style.pull_requests && !style.issues);
+    assert!(style.automations && style.activity_bar);
+    for key in ["changes", "pull_requests", "issues"] {
+        assert!(Config::parse(&format!("[sidebar]\n{key} = \"off\"")).is_err());
+    }
+    Ok(())
+}

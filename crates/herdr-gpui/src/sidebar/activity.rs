@@ -2,15 +2,17 @@
 //! what the window shows. Workspaces is the sidebar beside the terminals, as
 //! it was; every other section takes the window's body, keeping the bar,
 //! title bar, and status bar: Overview what needs the user on every host
-//! (`crate::overview`), Orchestrator, Pull requests, and Issues the focused
+//! (`crate::overview`), Changes the uncommitted files and recent commits of
+//! every checkout on this machine (`crate::changes`), Orchestrator, Pull
+//! requests, and Issues the focused
 //! workspace's orchestrator on that list (see `orchestrator::section`),
 //! Security the Dependabot alerts of every repository (`crate::security`),
 //! listed only once GitHub reports them on for one, Automations the
 //! `herdr-automate` scripts and runs of every host (`crate::automations`),
 //! and Usage the plan limits of every host (`crate::usage::section`).
 //! `[sidebar] activity_bar = false` turns the bar off, and `[sidebar]
-//! pull_requests`, `issues`, or `automations = false` leaves that section
-//! off it. With the bar on, the
+//! changes`, `pull_requests`, `issues`, or `automations = false` leaves that
+//! section off it. With the bar on, the
 //! sidebar toggle sits at the end of the Workspaces title, and collapsing the
 //! sidebar keeps the bar, with the compact rail and the toggle beside it.
 
@@ -47,6 +49,7 @@ const BUSY_PULSE: std::time::Duration = std::time::Duration::from_millis(1600);
 fn label(panel: ActivityPanel) -> &'static str {
     match panel {
         ActivityPanel::Overview => "Overview",
+        ActivityPanel::Changes => "Changes",
         ActivityPanel::Workspaces => "Workspaces",
         ActivityPanel::PullRequests => "Pull requests",
         ActivityPanel::Issues => "Issues",
@@ -59,6 +62,7 @@ fn label(panel: ActivityPanel) -> &'static str {
 fn icon(panel: ActivityPanel) -> &'static str {
     match panel {
         ActivityPanel::Overview => "icons/pulse.svg",
+        ActivityPanel::Changes => "icons/git-branch.svg",
         ActivityPanel::Workspaces => "icons/terminal.svg",
         ActivityPanel::PullRequests => "icons/pull-request.svg",
         ActivityPanel::Issues => "icons/issue.svg",
@@ -204,6 +208,7 @@ impl HerdrWindow {
         let style = &self.config.sidebar_style;
         match panel {
             ActivityPanel::Automations => style.automations,
+            ActivityPanel::Changes => style.changes,
             ActivityPanel::Issues => style.issues,
             ActivityPanel::PullRequests => style.pull_requests,
             _ => true,
@@ -215,6 +220,7 @@ impl HerdrWindow {
     pub(crate) fn activity_panel_key(panel: ActivityPanel) -> Option<&'static str> {
         match panel {
             ActivityPanel::Automations => Some("automations"),
+            ActivityPanel::Changes => Some("changes"),
             ActivityPanel::Issues => Some("issues"),
             ActivityPanel::PullRequests => Some("pull_requests"),
             _ => None,
@@ -310,6 +316,7 @@ impl HerdrWindow {
         match self.activity_section() {
             Some(
                 ActivityPanel::Overview
+                | ActivityPanel::Changes
                 | ActivityPanel::Security
                 | ActivityPanel::Automations
                 | ActivityPanel::Usage,
@@ -336,6 +343,7 @@ impl HerdrWindow {
         let section = match self.activity_section()? {
             ActivityPanel::Workspaces => return None,
             ActivityPanel::Overview => self.render_overview(cx),
+            ActivityPanel::Changes => self.render_changes_section(cx),
             ActivityPanel::Security => self.render_security_section(window, cx),
             ActivityPanel::Automations => self.render_automations_section(cx),
             ActivityPanel::Usage => self.render_usage_section(cx),
@@ -645,6 +653,7 @@ struct Bubble {
 fn panel_selector(panel: ActivityPanel) -> &'static str {
     match panel {
         ActivityPanel::Overview => "activity-overview",
+        ActivityPanel::Changes => "activity-changes",
         ActivityPanel::Workspaces => "activity-workspaces",
         ActivityPanel::PullRequests => "activity-pull-requests",
         ActivityPanel::Issues => "activity-issues",

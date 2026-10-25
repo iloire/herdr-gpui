@@ -150,6 +150,7 @@ impl HerdrWindow {
             browser,
             catalog,
             cell_width: 9.,
+            changes: Default::default(),
             chats: Default::default(),
             checkpoints: Default::default(),
             chrome_region: None,
