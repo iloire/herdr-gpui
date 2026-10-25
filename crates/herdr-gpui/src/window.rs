@@ -139,6 +139,8 @@ pub(crate) struct HerdrWindow {
     /// The activity bar's Changes section: every local checkout's files and
     /// recent commits.
     pub(crate) changes: crate::changes::Changes,
+    /// The Changes section's list, left of its review.
+    pub(crate) changes_list_width: crate::panel_resize::PanelWidth,
     /// Native views of the `herdr-acp` chats in this daemon's panes.
     pub(crate) chats: crate::chat::Chats,
     /// Snapshots of checkouts taken at agent turns, and the dialog listing them.
@@ -502,6 +504,9 @@ impl HerdrWindow {
         }
         if self.review_files_width.chosen().is_none() {
             self.review_files_width.restore(chrome.review_files_width);
+        }
+        if self.changes_list_width.chosen().is_none() {
+            self.changes_list_width.restore(chrome.changes_list_width);
         }
         // A device dragged before the stored order loaded keeps its place.
         if self.device_order.is_empty() {

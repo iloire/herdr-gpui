@@ -50,6 +50,7 @@ fn roundtrip_and_reset_drain_after_drop() {
         preferences.save(Chrome {
             activity_panel: None,
             activity_last_opened: Default::default(),
+            changes_list_width: None,
             sidebar_width: Some(width as f32),
             sidebar_split: Some(0.4),
             agent_sort: Some(AgentSort::Priority),
@@ -68,6 +69,7 @@ fn roundtrip_and_reset_drain_after_drop() {
         Chrome {
             activity_panel: None,
             activity_last_opened: Default::default(),
+            changes_list_width: None,
             sidebar_width: Some(100.0),
             sidebar_split: Some(0.4),
             agent_sort: Some(AgentSort::Priority),
@@ -93,6 +95,7 @@ fn only_a_toggled_sort_is_stored_and_older_files_migrate() {
     let chrome = |agent_sort| Chrome {
         activity_panel: None,
         activity_last_opened: Default::default(),
+        changes_list_width: None,
         sidebar_width: Some(240.0),
         sidebar_split: None,
         agent_sort,
@@ -168,6 +171,7 @@ fn drop_does_not_wait_for_blocked_worker_and_queued_saves_still_drain() {
         Chrome {
             activity_panel: None,
             activity_last_opened: Default::default(),
+            changes_list_width: None,
             sidebar_width: Some(160.),
             sidebar_split: None,
             agent_sort: Some(AgentSort::Grouped),
@@ -178,6 +182,7 @@ fn drop_does_not_wait_for_blocked_worker_and_queued_saves_still_drain() {
         Chrome {
             activity_panel: None,
             activity_last_opened: Default::default(),
+            changes_list_width: None,
             sidebar_width: Some(400.),
             sidebar_split: Some(0.6),
             agent_sort: Some(AgentSort::Priority),
@@ -237,6 +242,7 @@ fn malformed_and_invalid_widths_fall_back_to_default() {
                 Chrome {
                     activity_panel: None,
                     activity_last_opened: Default::default(),
+                    changes_list_width: None,
                     sidebar_width: Some(width),
                     sidebar_split: None,
                     agent_sort: None,
@@ -251,6 +257,7 @@ fn malformed_and_invalid_widths_fall_back_to_default() {
     let chrome = Chrome {
         activity_panel: None,
         activity_last_opened: Default::default(),
+        changes_list_width: Some(512.0),
         sidebar_width: Some(237.5),
         sidebar_split: None,
         agent_sort: None,
@@ -270,6 +277,7 @@ fn invalid_sidebar_splits_preserve_other_preferences() {
     let expected = Chrome {
         activity_panel: None,
         activity_last_opened: Default::default(),
+        changes_list_width: None,
         sidebar_width: Some(240.0),
         sidebar_split: None,
         agent_sort: Some(AgentSort::Priority),
@@ -317,6 +325,7 @@ fn sidebar_split_roundtrips_including_boundaries_and_reset() {
         let chrome = Chrome {
             activity_panel: None,
             activity_last_opened: Default::default(),
+            changes_list_width: None,
             sidebar_width: Some(240.0),
             sidebar_split,
             agent_sort: Some(AgentSort::Priority),

@@ -7,10 +7,9 @@ use crate::{
     browser::{Location, Store, TabId},
     changes::pane::Pick,
     sidebar::ActivityPanel,
-    state::ConnectionStatus,
 };
 use gpui::{Entity, VisualTestContext};
-use std::{sync::Arc, time::Instant};
+use std::time::Instant;
 
 /// Commits `name`, a new file; the commit's full name.
 fn commit(directory: &Path, name: &str) -> String {
@@ -37,33 +36,6 @@ fn checkout_read(path: &Path) -> (Shown, Vec<String>) {
     let located = herdr_vcs::changes::locate(path.to_str().unwrap(), deadline, &|| false).unwrap();
     let checkout = herdr_vcs::changes::read(located, deadline, &|| false).unwrap();
     (shown(checkout, &["w0"]), vec![second, first])
-}
-
-/// The fixture window with the activity bar, this machine's daemon
-/// connected, the pass's `read` installed, and the Changes section shown.
-fn window(
-    cx: &mut gpui::TestAppContext,
-    read: Read,
-) -> (Entity<HerdrWindow>, &mut VisualTestContext) {
-    let (view, cx) = cx.add_window_view(|window, cx| {
-        let mut view = crate::sidebar::layout_tests::fixture_window(window, cx);
-        view.config.sidebar_style.activity_bar = true;
-        let mut listing = crate::sidebar::layout_tests::snapshot(2);
-        listing.focused_workspace_id = Some("w0".into());
-        view.live.snapshot = Some(Arc::new(listing));
-        view.live.status = ConnectionStatus::Connected;
-        view.live.local_daemon_peer = true;
-        view.changes.read_for_test(read);
-        view
-    });
-    cx.update(|window, cx| {
-        view.update(cx, |view, cx| {
-            view.show_activity_panel(ActivityPanel::Changes, window, cx);
-            view.pick_first_change(cx);
-        })
-    });
-    cx.run_until_parked();
-    (view, cx)
 }
 
 /// What the review beside the list shows: what is picked and its files.

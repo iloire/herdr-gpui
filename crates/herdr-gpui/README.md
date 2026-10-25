@@ -2275,8 +2275,10 @@ window at once, and `herdr-gpui ui panel NAME` shows a section.
   (see [Reviewing a commit](#reviewing-a-commit)), even in a detached
   checkout. The first item is picked when the section opens, and once the
   list is clicked, ↑ and ↓ step through its uncommitted changes and commits.
-  The review keeps unified or side by side, whitespace, and its panels from
-  one pick to the next; while notes in it wait to be sent, another pick is
+  Drag the line between the list and the review to give either more room;
+  a double-click on it goes back to the default width, and the width is
+  remembered. The review keeps unified or side by side, whitespace, and its
+  panels from one pick to the next; while notes in it wait to be sent, another pick is
   refused so they are not lost. Right-clicking a commit copies its full
   name. All counts are as of the last fetch; nothing contacts a remote. Dirty checkouts come first, then unpushed, unmerged, and behind.
   **Needs attention**, the default, folds clean checkouts away; **All** lists

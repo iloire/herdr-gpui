@@ -46,6 +46,7 @@ impl HerdrWindow {
             preferences.save(crate::preferences::Chrome {
                 activity_panel: self.activity.chosen(),
                 activity_last_opened: self.activity.last_opened().clone(),
+                changes_list_width: self.changes_list_width.chosen(),
                 sidebar_width: self.sidebar_width,
                 sidebar_split: self.sidebar_split,
                 agent_sort: self.agent_sort_modified.then_some(self.agent_sort),

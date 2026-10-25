@@ -24,6 +24,8 @@ pub(crate) enum Side {
 /// The panel a drag resizes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum PanelDrag {
+    /// The Changes section's list, beside the review of what it picked.
+    ChangesList,
     /// The notes beside a review; they share their width with a page's.
     ReviewNotes,
     /// The notes beside an annotated page; only builds that show pages
@@ -40,6 +42,8 @@ pub(crate) enum PanelDrag {
 
 /// The notes panel beside a review or an annotated page.
 pub(crate) const NOTES: PanelWidth = PanelWidth::new(300., 220.);
+/// The Changes section's list, left of its review.
+pub(crate) const CHANGES_LIST: PanelWidth = PanelWidth::new(420., 260.);
 /// The review's list of changed files.
 pub(crate) const REVIEW_FILES: PanelWidth = PanelWidth::new(240., 160.);
 /// The settings window's section list.
@@ -185,6 +189,7 @@ impl crate::HerdrWindow {
     /// panel sits on; `None` for a panel another window owns.
     fn window_panel(&mut self, drag: PanelDrag) -> Option<(&mut PanelWidth, Side)> {
         match drag {
+            PanelDrag::ChangesList => Some((&mut self.changes_list_width, Side::Left)),
             PanelDrag::ReviewNotes => Some((&mut self.notes_width, Side::Right)),
             #[cfg(any(target_os = "macos", windows))]
             PanelDrag::PageNotes => Some((&mut self.notes_width, Side::Right)),
@@ -196,6 +201,7 @@ impl crate::HerdrWindow {
     /// `window_panel` to read while drawing.
     fn panel_at(&self, drag: PanelDrag) -> Option<(PanelWidth, Side)> {
         match drag {
+            PanelDrag::ChangesList => Some((self.changes_list_width, Side::Left)),
             PanelDrag::ReviewNotes => Some((self.notes_width, Side::Right)),
             #[cfg(any(target_os = "macos", windows))]
             PanelDrag::PageNotes => Some((self.notes_width, Side::Right)),

@@ -119,15 +119,13 @@ impl HerdrWindow {
 
     /// The list on the left, which ↑ and ↓ step through once it holds the
     /// keyboard.
+    /// Dragging its right edge resizes it, giving the review the room it
+    /// leaves; a double-click goes back to the default width.
     fn changes_list(&self, cx: &mut Context<Self>) -> Stateful<Div> {
-        div()
+        let scroll = div()
             .id("changes-section-scroll")
             .debug_selector(|| "changes-list".into())
-            .flex_none()
-            .w(relative(0.36))
-            .min_w(px(320.))
-            .max_w(px(560.))
-            .min_h_0()
+            .size_full()
             .overflow_y_scroll()
             .track_scroll(&self.changes.scroll)
             .when_some(self.changes.focus.clone(), |list, focus| {
@@ -146,7 +144,19 @@ impl HerdrWindow {
                 cx.stop_propagation();
                 this.step_change(forward, cx);
             }))
-            .child(self.changes_body(cx))
+            .child(self.changes_body(cx));
+        self.resizable_panel(
+            div()
+                .id("changes-list-panel")
+                .debug_selector(|| "changes-list-panel".into())
+                .flex_none()
+                .min_h_0()
+                .child(scroll),
+            "changes-list-resize",
+            crate::panel_resize::PanelDrag::ChangesList,
+            None,
+            cx,
+        )
     }
 
     /// Needs attention or All, as one control that names what it lists.

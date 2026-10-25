@@ -151,6 +151,7 @@ impl HerdrWindow {
             catalog,
             cell_width: 9.,
             changes: Default::default(),
+            changes_list_width: crate::panel_resize::CHANGES_LIST,
             chats: Default::default(),
             checkpoints: Default::default(),
             chrome_region: None,

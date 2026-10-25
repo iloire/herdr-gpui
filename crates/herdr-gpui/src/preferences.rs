@@ -120,6 +120,8 @@ pub struct Chrome {
     /// When each activity bar section was last open, so its count shows in
     /// the accent only for what changed since.
     pub activity_last_opened: HashMap<crate::sidebar::ActivityPanel, DateTime<Utc>>,
+    /// The Changes section's list's width, once dragged.
+    pub changes_list_width: Option<f32>,
     pub sidebar_width: Option<f32>,
     pub sidebar_split: Option<f32>,
     /// The sort the user picked with the panel toggle, like upstream's
@@ -288,6 +290,7 @@ fn read_chrome(path: &Path) -> crate::Result<Chrome> {
             .and_then(serde_json::Value::as_str)
             .and_then(crate::sidebar::ActivityPanel::parse),
         activity_last_opened: last_opened(object.get("activity_last_opened_at")),
+        changes_list_width: panel_width("changes_list_width_px"),
         sidebar_width,
         sidebar_split,
         agent_sort,
@@ -375,6 +378,9 @@ fn write_chrome(path: &Path, chrome: Chrome) -> crate::Result<()> {
                 "notes_width_px": chrome.notes_width.filter(|width| width.is_finite() && *width > 0.0),
                 "review_files_width_px": chrome
                     .review_files_width
+                    .filter(|width| width.is_finite() && *width > 0.0),
+                "changes_list_width_px": chrome
+                    .changes_list_width
                     .filter(|width| width.is_finite() && *width > 0.0),
                 "device_order": chrome.device_order,
             }),
