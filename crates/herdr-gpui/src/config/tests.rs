@@ -41,6 +41,7 @@ mod px0;
 mod remote;
 mod repository_icons;
 mod review_sections;
+mod security_section;
 mod sidebar_scope;
 mod sidebar_search;
 mod sidebar_settings;

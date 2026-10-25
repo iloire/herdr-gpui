@@ -387,6 +387,11 @@ size = 12
 # pull_requests = true
 # issues = true
 
+# The bar's Security section, which lists the Dependabot alerts and private
+# vulnerability reports of every github.com repository the workspaces hold.
+# false hides it, and Herdr UI then stops reading them from GitHub.
+# security = true
+
 # A colour per host, keyed by the host's name in the sidebar, as #rgb or
 # #rrggbb. It washes the host's header, its workspace rows, and its agents'
 # rows faintly, so a long list reads by colour. Names with spaces go in quotes.

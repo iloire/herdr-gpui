@@ -19,6 +19,7 @@ mod reports;
 mod saved;
 mod section;
 mod state;
+mod turned_off;
 mod unreadable;
 
 /// One alert node in the shape GitHub's GraphQL API answers with.

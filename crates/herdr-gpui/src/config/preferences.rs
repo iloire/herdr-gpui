@@ -69,6 +69,8 @@ pub(crate) enum Preference {
     SidebarPullRequests(bool),
     /// `[sidebar] issues`: whether the bar shows Issues.
     SidebarIssues(bool),
+    /// `[sidebar] security`: whether the bar shows Security.
+    SidebarSecurity(bool),
     /// `[sidebar] device_footer`: when the sidebar draws its device footer.
     SidebarDeviceFooter(DeviceFooter),
     /// `[sidebar] change_counts`: whose line counts a worktree row shows.
@@ -245,6 +247,9 @@ impl Config {
                     (Some("sidebar"), "pull_requests", Some(value.into()))
                 }
                 Preference::SidebarIssues(value) => (Some("sidebar"), "issues", Some(value.into())),
+                Preference::SidebarSecurity(value) => {
+                    (Some("sidebar"), "security", Some(value.into()))
+                }
                 Preference::SidebarDeviceFooter(footer) => (
                     Some("sidebar"),
                     "device_footer",

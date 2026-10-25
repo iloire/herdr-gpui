@@ -21,6 +21,7 @@ pub(super) enum SidebarKey {
     Automations,
     PullRequests,
     Issues,
+    Security,
     ChangeCounts,
     Host(String),
 }
@@ -37,6 +38,7 @@ impl SidebarKey {
         Self::Automations,
         Self::PullRequests,
         Self::Issues,
+        Self::Security,
         Self::ChangeCounts,
     ];
 
@@ -54,6 +56,7 @@ impl SidebarKey {
             Self::Automations => to.automations = from.automations,
             Self::PullRequests => to.pull_requests = from.pull_requests,
             Self::Issues => to.issues = from.issues,
+            Self::Security => to.security = from.security,
             Self::ChangeCounts => to.change_counts = from.change_counts,
             Self::Host(host) => match from.hosts.get(host) {
                 Some(color) => {
@@ -80,6 +83,7 @@ impl SidebarKey {
             Self::Automations => Preference::SidebarAutomations(style.automations),
             Self::PullRequests => Preference::SidebarPullRequests(style.pull_requests),
             Self::Issues => Preference::SidebarIssues(style.issues),
+            Self::Security => Preference::SidebarSecurity(style.security),
             Self::ChangeCounts => Preference::SidebarChangeCounts(style.change_counts),
             Self::Host(host) => Preference::HostColor {
                 host: host.clone(),
@@ -101,6 +105,7 @@ impl SidebarKey {
             Self::Automations => before.automations != after.automations,
             Self::PullRequests => before.pull_requests != after.pull_requests,
             Self::Issues => before.issues != after.issues,
+            Self::Security => before.security != after.security,
             Self::ChangeCounts => before.change_counts != after.change_counts,
             Self::Host(host) => before.hosts.get(host) != after.hosts.get(host),
         }

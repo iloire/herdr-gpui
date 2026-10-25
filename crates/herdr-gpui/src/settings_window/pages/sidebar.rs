@@ -214,6 +214,26 @@ impl SettingsWindow {
                     ),
             )
             .child(
+                ui::row(theme, "sidebar-security", "Show security")
+                    .description(
+                        "The activity bar's Security section. Off, Herdr UI stops reading \
+                         repositories' Dependabot alerts and vulnerability reports.",
+                    )
+                    .switch(
+                        ui::toggle(
+                            theme,
+                            "sidebar-security-toggle",
+                            self.config.sidebar_style.security,
+                            ready,
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            let mut intent = SidebarIntent::of(&this.config);
+                            intent.style.security = !intent.style.security;
+                            this.commit_sidebar(intent, cx);
+                        })),
+                    ),
+            )
+            .child(
                 ui::row(theme, "sidebar-automations", "Show automations")
                     .description(
                         "The activity bar's Automations section. Off, Herdr UI neither reads \

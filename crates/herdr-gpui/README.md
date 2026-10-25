@@ -2297,6 +2297,9 @@ window at once, and `herdr-gpui ui panel NAME` shows a section.
   workspaces hold (see [Orchestrator](#orchestrator)). Refresh spins while a
   sync runs. `[sidebar] pull_requests = false` or `issues = false` leaves
   either off the bar.
+- **Security** lists the Dependabot alerts and private vulnerability reports
+  of the same repositories, most severe first, read every 15 minutes.
+  `[sidebar] security = false` leaves it off the bar and stops the reads.
 - **Usage** shows every host's plan limits, one card per signed-in agent. Only
   the selected host is read; another host shows what was read while it was
   selected.

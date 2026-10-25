@@ -237,7 +237,10 @@ impl HerdrWindow {
             self.security.accounts = accounts;
             cx.notify();
         }
-        if !self.activity_bar_shown() || !self.security.due(now) {
+        if !self.activity_bar_shown()
+            || !self.activity_panel_listed(ActivityPanel::Security)
+            || !self.security.due(now)
+        {
             return;
         }
         let specs: Vec<_> = self

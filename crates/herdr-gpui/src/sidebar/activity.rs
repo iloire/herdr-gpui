@@ -11,8 +11,8 @@
 //! `herdr-automate` scripts and runs of every host (`crate::automations`),
 //! and Usage the plan limits of every host (`crate::usage::section`).
 //! `[sidebar] activity_bar = false` turns the bar off, and `[sidebar]
-//! changes`, `pull_requests`, `issues`, or `automations = false` leaves that
-//! section off it. With the bar on, the
+//! changes`, `pull_requests`, `issues`, `security`, or `automations = false`
+//! leaves that section off it. With the bar on, the
 //! sidebar toggle sits at the end of the Workspaces title, and collapsing the
 //! sidebar keeps the bar, with the compact rail and the toggle beside it.
 
@@ -211,6 +211,7 @@ impl HerdrWindow {
             ActivityPanel::Changes => style.changes,
             ActivityPanel::Issues => style.issues,
             ActivityPanel::PullRequests => style.pull_requests,
+            ActivityPanel::Security => style.security,
             _ => true,
         }
     }
@@ -223,6 +224,7 @@ impl HerdrWindow {
             ActivityPanel::Changes => Some("changes"),
             ActivityPanel::Issues => Some("issues"),
             ActivityPanel::PullRequests => Some("pull_requests"),
+            ActivityPanel::Security => Some("security"),
             _ => None,
         }
     }

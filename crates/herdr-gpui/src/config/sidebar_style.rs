@@ -146,6 +146,9 @@ pub struct SidebarStyle {
     /// `pull_requests`: the bar's Pull requests section. On unless turned
     /// off.
     pub pull_requests: bool,
+    /// `security`: the bar's Security section, and its read of every
+    /// repository's alerts and reports. On unless turned off.
+    pub security: bool,
     pub select: SelectMode,
 }
 
@@ -161,6 +164,7 @@ impl Default for SidebarStyle {
             issues: true,
             overrides: SidebarOverrides::default(),
             pull_requests: true,
+            security: true,
             select: SelectMode::default(),
         }
     }
@@ -196,6 +200,7 @@ pub(super) struct SidebarSettings {
     pub(super) changes: Option<bool>,
     pub(super) issues: Option<bool>,
     pub(super) pull_requests: Option<bool>,
+    pub(super) security: Option<bool>,
 }
 
 impl SidebarSettings {
@@ -224,6 +229,7 @@ impl SidebarSettings {
             issues: self.issues.unwrap_or(true),
             overrides: self.overrides,
             pull_requests: self.pull_requests.unwrap_or(true),
+            security: self.security.unwrap_or(true),
             select: self.select,
         })
     }
@@ -265,6 +271,7 @@ impl<'de> Deserialize<'de> for SidebarSettings {
                         "changes" => settings.changes = Some(map.next_value()?),
                         "issues" => settings.issues = Some(map.next_value()?),
                         "pull_requests" => settings.pull_requests = Some(map.next_value()?),
+                        "security" => settings.security = Some(map.next_value()?),
                         "hosts" => settings.hosts = map.next_value()?,
                         _ => {
                             map.next_value::<serde::de::IgnoredAny>()?;

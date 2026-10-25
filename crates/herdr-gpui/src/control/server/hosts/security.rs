@@ -23,6 +23,9 @@ pub(super) const MAX_REPORTS: usize = 50;
 pub(super) const BUDGET: usize = MAX_MESSAGE - 4096;
 
 pub(super) fn alerts(view: &HerdrWindow) -> Response {
+    if let Some(off) = turned_off(view) {
+        return off;
+    }
     let security = &view.security;
     let (repositories, cut) = listing(security.repos());
     let note = if cut {
@@ -43,6 +46,17 @@ pub(super) fn alerts(view: &HerdrWindow) -> Response {
     }
 }
 
+/// The refusal while Settings, Sidebar, Show security is off: the section
+/// reads nothing then, so its last read would only be stale.
+fn turned_off(view: &HerdrWindow) -> Option<Response> {
+    (!view.activity_panel_listed(ActivityPanel::Security)).then(|| {
+        Response::error(
+            ErrorCode::Unsupported,
+            "Security is turned off: [sidebar] security = false",
+        )
+    })
+}
+
 /// `security open`: shows an alert's or report's page in the section, as
 /// the section last read it. A name the listing does not hold is refused
 /// rather than read: the page belongs to the listing's account.
@@ -53,6 +67,9 @@ pub(super) fn open(
     window: &mut Window,
     cx: &mut Context<HerdrWindow>,
 ) -> Response {
+    if let Some(off) = turned_off(view) {
+        return off;
+    }
     let Some(named) = Item::named(repository, item) else {
         return Response::error(
             ErrorCode::InvalidRequest,
