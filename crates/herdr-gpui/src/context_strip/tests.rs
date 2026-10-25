@@ -1,6 +1,9 @@
 #![allow(clippy::unwrap_used)]
 
-use super::{ContextStrip, INTERVAL, Target, render::pending_worktrees};
+use super::{
+    ContextStrip, INTERVAL, Target,
+    render::{pending_worktrees, repo_path},
+};
 use crate::{
     HerdrWindow,
     sidebar::layout_tests::{fixture_window, full_draw},
@@ -73,6 +76,23 @@ fn worktrees_with_work_not_on_the_default_branch_are_pending() {
 }
 
 #[test]
+fn the_path_names_the_checkout_and_where_the_pane_is_inside_it() {
+    assert_eq!(
+        repo_path("/code/app", "/code/app/crates/core"),
+        ("/code/app".to_owned(), "/crates/core".to_owned())
+    );
+    assert_eq!(
+        repo_path("/code/app", "/code/app"),
+        ("/code/app".to_owned(), String::new())
+    );
+    // A folder reached through a link Git resolved shows the checkout alone.
+    assert_eq!(
+        repo_path("/private/code/app", "/code/app/src"),
+        ("/private/code/app".to_owned(), String::new())
+    );
+}
+
+#[test]
 fn moving_focus_to_another_folder_forgets_the_last_read() {
     let mut strip = ContextStrip::default();
     strip.seed(
@@ -134,7 +154,9 @@ fn the_strip_sits_between_the_terminal_and_the_status_bar(cx: &mut TestAppContex
     let bar = bounds("connection-status", cx).unwrap();
     assert_eq!(terminal.bottom(), strip.top());
     assert_eq!(strip.bottom(), bar.top());
-    assert!(bounds("context-branch", cx).is_some());
+    let path = bounds("context-path", cx).unwrap();
+    let branch = bounds("context-branch", cx).unwrap();
+    assert!(path.right() <= branch.left());
 
     view.update(cx, |view, cx| {
         view.config.show_context_strip = false;

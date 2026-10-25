@@ -109,7 +109,7 @@ agent_checkpoints = true
 # stops all scanning. Also under Settings > General.
 show_listening_ports = true
 # Show a line under the terminal about the focused pane's checkout on this
-# machine: branch and how far it is from its upstream, uncommitted files and
+# machine: its folder, branch and how far it is from its upstream, uncommitted files and
 # lines, stashes, other worktrees with work not merged, the branch's pull
 # request, and a rebase, merge, cherry-pick, revert, or bisect stopped
 # halfway, or a git-crypt repository still locked. Read every 10 seconds

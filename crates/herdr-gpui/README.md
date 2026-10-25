@@ -1668,7 +1668,8 @@ maximize/restore, and the shadow.
 ## Context Strip
 
 A line between the terminal and the status bar describes the focused pane's
-folder: the checkout's branch with `↑` commits to push and `↓` to pull, its
+folder: the checkout's own folder, with the subfolder the pane is in after
+it in muted text, its branch with `↑` commits to push and `↓` to pull, its
 uncommitted files with lines added and removed, stashes, the repository's
 other worktrees and how many still hold work not on the default branch, and
 the branch's pull request with its checks once the prefetch has it. What needs

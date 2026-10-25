@@ -13,6 +13,7 @@ use crate::{
 };
 use gpui::{prelude::*, *};
 use herdr_vcs::context::Context as Read;
+use std::path::Path;
 
 const ICON: f32 = 13.;
 
@@ -70,20 +71,43 @@ impl HerdrWindow {
                 .child(folder(Some("not a Git checkout")))
                 .into_any_element(),
             Some(Ok(read)) => strip
-                .child(self.context_segments(read, cx))
+                .child(self.context_segments(target, read, cx))
                 .child(div().flex_1())
                 .children(self.context_pull_request(target, read, cx))
                 .into_any_element(),
         })
     }
 
-    /// The checkout's segments, hairlines between them. They clip, branch
-    /// name first, so the pull request on the right keeps its room.
-    fn context_segments(&self, read: &Read, cx: &mut Context<Self>) -> Div {
+    /// The checkout's segments, hairlines between them. They clip, path and
+    /// branch name first, so the pull request on the right keeps its room.
+    fn context_segments(&self, target: &Target, read: &Read, cx: &mut Context<Self>) -> Div {
         let theme = &self.theme;
         let checkout = &read.checkout;
         let (red, green, yellow) = (ink(theme, 1), ink(theme, 2), ink(theme, 3));
         let mut segments: Vec<AnyElement> = Vec::new();
+
+        let (path, inside) = repo_path(&checkout.path, &target.directory);
+        let label = format!("{path}{inside}");
+        let quiet = HighlightStyle {
+            color: Some(rgb(theme.muted).into()),
+            ..Default::default()
+        };
+        segments.push(
+            segment("path", label.clone())
+                .flex_shrink(1.)
+                .min_w_0()
+                .child(
+                    div()
+                        .min_w_0()
+                        .truncate()
+                        .text_color(rgb(theme.subtext()))
+                        .child(
+                            StyledText::new(label.clone())
+                                .with_highlights([(path.len()..label.len(), quiet)]),
+                        ),
+                )
+                .into_any_element(),
+        );
 
         let branch = checkout.branch.as_deref().unwrap_or("detached HEAD");
         segments.push(
@@ -230,6 +254,18 @@ impl HerdrWindow {
                 this.show_activity_panel(ActivityPanel::Changes, window, cx);
             }))
     }
+}
+
+/// The checkout's top folder with home written `~`, and where the pane is
+/// below it, if deeper: `("~/code/app", "/crates/core")`.
+pub(super) fn repo_path(checkout: &str, directory: &str) -> (String, String) {
+    let inside = Path::new(directory)
+        .strip_prefix(checkout)
+        .ok()
+        .filter(|rest| !rest.as_os_str().is_empty())
+        .map(|rest| format!("/{}", rest.display()))
+        .unwrap_or_default();
+    (home_relative(checkout), inside)
 }
 
 /// The other worktrees holding work not on the default branch yet:
