@@ -133,6 +133,9 @@ impl HerdrWindow {
         let id = tab.id;
         let code = tab.place.is_editor();
         let loaded = tab.location.is_some();
+        // A file the user opened has no agent to send notes to.
+        #[cfg(any(target_os = "macos", windows))]
+        let file_tab = crate::browser::file_tabs::is_file_tab(tab);
         let external = match &tab.location {
             Some(Location::Web { url }) => Some(url.clone()),
             _ => None,
@@ -196,7 +199,7 @@ impl HerdrWindow {
                             }))
                     })
             };
-            (Some(button), panel)
+            (Some(button).filter(|_| !file_tab), panel)
         };
         // Linux builds show no pages, so there is nothing to annotate.
         #[cfg(not(any(target_os = "macos", windows)))]

@@ -262,6 +262,12 @@ impl HerdrWindow {
             .filter(|panel| !beside_terminals(*panel))
     }
 
+    /// Whether the window is in the Files view, whose strips list file
+    /// tabs, whether or not its column is folded.
+    pub(crate) fn files_view(&self) -> bool {
+        self.activity_bar_leads() && self.activity_panel() == ActivityPanel::Files
+    }
+
     /// Whether the Files tree is on screen beside the terminals.
     pub(crate) fn files_shown(&self) -> bool {
         self.activity_bar_leads()
@@ -315,8 +321,12 @@ impl HerdrWindow {
         }
         // A section picked is where the user is now, not a place to go back to.
         self.activity.return_to = None;
+        let files = self.files_view();
         if self.activity.pick(panel) {
             self.save_chrome();
+        }
+        if files != self.files_view() {
+            self.files_view_changed(cx);
         }
         self.sync_activity_section(cx);
         match self.activity_section() {

@@ -26,6 +26,7 @@ mod editor;
 #[cfg(any(target_os = "macos", windows))]
 mod favicon;
 mod feedback;
+mod file_tabs;
 mod group_motion;
 mod groups;
 mod groups_view;

@@ -558,6 +558,36 @@ impl Layout {
         }
     }
 
+    /// Takes the tabs `aside` names off the groups showing them. Each such
+    /// group shows the last of its own tabs not set aside instead, or, with
+    /// none, nothing, which a lone group reads as following the terminal.
+    /// Returns what each of them showed, for [`Self::bring_back`].
+    pub(crate) fn set_aside(&mut self, aside: impl Fn(&Pick) -> bool) -> Vec<(GroupId, Pick)> {
+        let mut taken = Vec::new();
+        for index in 0..self.groups.len() {
+            let Some(pick) = self.groups[index].pick.clone().filter(|pick| aside(pick)) else {
+                continue;
+            };
+            let id = self.groups[index].id;
+            let instead = self
+                .owners
+                .iter()
+                .rev()
+                .find(|(tab, owner)| *owner == id && !aside(tab))
+                .map(|(tab, _)| tab.clone());
+            self.groups[index].pick = instead;
+            taken.push((id, pick));
+        }
+        taken
+    }
+
+    /// Shows again what [`Self::set_aside`] took, in the groups still here.
+    pub(crate) fn bring_back(&mut self, taken: Vec<(GroupId, Pick)>) {
+        for (id, pick) in taken {
+            self.show(id, pick);
+        }
+    }
+
     /// Every tab the layout names: the ones groups show and the ones they
     /// own.
     pub(crate) fn tabs(&self) -> impl Iterator<Item = &Pick> + '_ {

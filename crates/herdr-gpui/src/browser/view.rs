@@ -68,6 +68,8 @@ pub(crate) struct Browser {
     pub(super) failed: HashMap<TabId, SharedString>,
     /// The files of the focused workspace's tabs, followed on disk.
     pub(super) disk: super::disk_watch::DiskWatch,
+    /// File tabs, which only the Files view lists.
+    pub(super) file_tabs: super::file_tabs::FileTabs,
     /// Whether the VS Code server answers, asked before its pages open.
     pub(super) code_server: super::code::CodeServer,
     pub(super) px0: super::px0::Pages,
@@ -124,6 +126,7 @@ impl Browser {
             group_motion: Default::default(),
             failed: HashMap::new(),
             disk: Default::default(),
+            file_tabs: Default::default(),
             code_server: Default::default(),
             px0: Default::default(),
             workspaces: None,
@@ -341,6 +344,7 @@ impl HerdrWindow {
         self.poll_reviews(cx);
         self.poll_code_views(cx);
         self.poll_tab_files(cx);
+        self.sync_file_tabs(cx);
         self.poll_orchestrators(window, cx);
         self.sync_addresses(false, window, cx);
     }

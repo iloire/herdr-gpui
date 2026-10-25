@@ -300,13 +300,19 @@ impl HerdrWindow {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn shown_pick_for_test(&self, group: GroupId) -> Option<Pick> {
+        self.shown_pick(group)
+    }
+
     /// Whether this window keeps `pick` out of the focused workspace's
-    /// strips; see [`super::hidden`].
+    /// strips; see [`super::hidden`] and [`super::file_tabs`].
     fn hides_tab(&self, pick: &Pick) -> bool {
-        !self.browser.hidden.is_empty()
-            && self
-                .browser_key()
-                .is_some_and(|key| self.browser.hidden.hides(&key, pick))
+        self.sets_files_aside(pick)
+            || !self.browser.hidden.is_empty()
+                && self
+                    .browser_key()
+                    .is_some_and(|key| self.browser.hidden.hides(&key, pick))
     }
 
     /// The focused workspace's tabs this window lists, in strip order:

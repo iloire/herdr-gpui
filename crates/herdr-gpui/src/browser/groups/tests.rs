@@ -452,3 +452,5 @@ fn selectors_keep_their_names_in_the_first_group() {
     assert_eq!(slot(0).selector("tab-t0"), "tab-t0");
     assert_eq!(slot(2).selector("tab-t0"), "g2-tab-t0");
 }
+
+mod set_aside;
