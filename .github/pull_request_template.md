@@ -6,8 +6,7 @@
 
 <!-- Commands you actually ran, and their result. Delete what does not apply. -->
 
-- [ ] `just format`
-- [ ] `just ci`
+- [ ] `just quick`
 - [ ] `just test-build` (linking, startup, or packaging changes)
 - [ ] Verified in the real native window (visual changes)
 

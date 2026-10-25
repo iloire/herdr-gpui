@@ -41,14 +41,16 @@ On macOS these launch `target/<profile>/Herdr.app`, so the running app is named
 
 ## Verifying a Change
 
-Run the workspace gates before opening a PR:
+Iterate with `just quick`, and run it without a test filter before opening a
+PR. It formats, runs the file checks, then clippy and the tests of only the
+crates your branch changes, with every feature:
 
 ```sh
-just format
-just ci
+just quick
 ```
 
-`just ci` is exactly what CI runs: `cargo fmt --all -- --check`, a
+CI then runs the full gate. To reproduce it locally, `just ci` is exactly what
+CI runs: `cargo fmt --all -- --check`, a
 `-D warnings` clippy pass over all targets and features, and the test suite
 under both default and all features. CI additionally builds release binaries
 for Apple Silicon, Intel macOS, and native Ubuntu 24.04 x86_64/ARM64, exercising

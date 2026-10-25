@@ -171,7 +171,7 @@ Once the user settles on a direction:
    `Look` with that module's real state (`self.theme`, `self.config`, row
    context, and so on). Keep the structure the user approved.
 2. Add headless tests for its geometry (`debug_selector` / `debug_bounds`, as
-   the existing tests do), then run `just format` and `just ci`. Check it
+   the existing tests do), then run `just quick`. Check it
    natively with `just run`.
 3. Stop the mockup process and delete `$dir`. The mockup file never enters the
    repository.

@@ -53,6 +53,27 @@ test:
     cargo test --locked --workspace
     cargo test --locked --workspace --all-features
 
+# Formats, runs the fast file checks, then clippy and tests for only the crates
+# this branch changes against origin/main (herdr-gpui when none), with every
+# feature, which covers what the default build tests. GitHub CI runs the full
+# gate (`just ci`).
+# Fast local loop on the changed crates; arguments filter tests: `just quick folder_card`.
+quick *filter:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo fmt --all
+    bash scripts/check-file-size.sh
+    python3 scripts/check-sorted.py
+    base=$(git merge-base HEAD origin/main)
+    crates=$({ git diff --name-only "$base"; git ls-files --others --exclude-standard; } \
+        | sed -n 's|^crates/\([^/]*\)/.*|\1|p' | sort -u \
+        | while read -r crate; do [ -f "crates/$crate/Cargo.toml" ] && echo "$crate"; done)
+    packages=()
+    for crate in ${crates:-herdr-gpui}; do packages+=(-p "$crate"); done
+    echo "quick: ${packages[*]}"
+    cargo clippy --locked "${packages[@]}" --all-targets --all-features -- -D warnings
+    cargo test --locked "${packages[@]}" --all-features -- {{filter}}
+
 # The same suites under cargo-nextest, a process per test (see .config/nextest.toml).
 # Doctests do not run here; `just test` remains the CI gate.
 nextest *args:

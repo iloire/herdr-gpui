@@ -224,13 +224,21 @@ and `publish` passes its `RELEASE_NOTES.md` to `gh release create --notes-file`.
 
 ## Verification
 
-Prefer the existing `just` recipes. Run focused tests while iterating, then the
-workspace gates for Rust changes before handoff or a requested commit:
+Prefer the existing `just` recipes. The local loop is `just quick`: it formats,
+runs the file checks, then clippy and the tests of only the crates the branch
+changes, with every feature. About a minute after an edit in a warm checkout.
+Pass a filter while iterating, and run it once without one before handing off,
+committing, or pushing:
 
 ```sh
-just format
-just ci
+just quick folder_card   # while iterating
+just quick               # before handoff or push
 ```
+
+GitHub CI is the full gate: every crate, default and all features, Windows,
+and Linux. Do not run `just ci` locally as a routine step; it takes over ten
+minutes and repeats what CI does. Run it only when asked, or when changing CI,
+the build, or packaging.
 
 - For linking, startup, or packaging changes, also use `just test-build` to build the release executable and exercise its CLI without a desktop.
 - The `windows` CI job checks formatting, lints every target and feature, and
@@ -247,8 +255,8 @@ just ci
   behavior that appears to work.
 - A `cfg` gate is only proven on the platform it names. Before handing off a
   change that touches one, run `just lint-linux` and `just lint-windows` as well
-  as `just ci`: a macOS run cannot see a Linux-only gate, and neither can the
-  Windows cross-check.
+  as `just quick`: a macOS run cannot see a Linux-only gate, and neither can the
+  Windows cross-check. Run them once, not after every edit.
 - Documentation-only changes need command/path/link review and `git diff --check`; do not claim a code test run that did not happen.
 - Add deterministic tests for invariants: ordering, cancellation, fragmentation, revision fencing, error paths, geometry, and cleanup. Prefer explicit coordination and bounded waits over timing guesses.
 - Test pure session/CLI/geometry logic without a socket or window where possible. Exercise public behavior with mock peers and headless GPUI tests where integration matters.
@@ -289,14 +297,14 @@ just test-perf
   guidance from the agent harness; add such lines only when the user asks for
   them in the current request.
 - Before creating a PR, review every included commit and the full diff from its base. Include a summary, exact validation commands/results, and remaining manual/native QA.
-- Run `just ci` on the exact commit before creating a PR or pushing to one, so
-  failures surface locally instead of minutes later in CI. `just setup-ci`
-  installs the tools it and the other CI-equivalent recipes need. Fix every
-  failure first; do not open or update a PR on a red or skipped run.
-- After a green run, create or update a single PR comment saying `just ci`
-  ran locally and passed: the commit SHA, the platform (for example macOS
-  arm64), and any extra recipes run (`just release-check`, `just lint-linux`,
-  `just lint-windows`). Edit that comment on later pushes rather than adding
+- Run `just quick` on the exact commit before creating a PR or pushing, and
+  fix every failure first. GitHub CI then runs the full gate; watch it and fix
+  what it finds rather than waiting on `just ci` locally. `just setup-ci`
+  installs the tools the CI-equivalent recipes need.
+- On a PR, create or update a single comment saying what ran locally and
+  passed: the commit SHA, the platform (for example macOS arm64), and the
+  recipes (`just quick`, plus any of `just lint-linux`, `just lint-windows`,
+  `just release-check`). Edit that comment on later pushes rather than adding
   a new one, and never post it for a run that failed or did not happen.
 - Include screenshots in any PR that changes something visible: before and
   after images of the real native window, showing the changed area. Add light
