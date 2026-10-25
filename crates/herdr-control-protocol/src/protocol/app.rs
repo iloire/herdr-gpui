@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 pub enum ActivityPanel {
     #[default]
     Workspaces,
+    Files,
     Overview,
     Changes,
     PullRequests,
@@ -19,6 +20,7 @@ pub enum ActivityPanel {
 impl ActivityPanel {
     pub const ALL: &[Self] = &[
         Self::Workspaces,
+        Self::Files,
         Self::Overview,
         Self::Changes,
         Self::PullRequests,
@@ -32,6 +34,7 @@ impl ActivityPanel {
         match self {
             Self::Overview => "overview",
             Self::Changes => "changes",
+            Self::Files => "files",
             Self::Workspaces => "workspaces",
             Self::PullRequests => "pull-requests",
             Self::Issues => "issues",

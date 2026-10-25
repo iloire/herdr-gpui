@@ -1,0 +1,425 @@
+//! Drawing the Files section: a header naming the checkout and the folder
+//! followed, the changed files newest first, then the tree. Every row has
+//! one height so the list draws only the rows in view, however large the
+//! checkout. A file opens in a code tab beside the terminals, or with the
+//! secondary modifier in the terminal editor beside the focused pane.
+
+use super::{
+    Status,
+    tree::{Entry, Row},
+};
+use crate::{HerdrWindow, editor::EditorTarget, fonts::StyledFont};
+use gpui::{prelude::*, *};
+use herdr_vcs::code_index::Change;
+use std::{ops::Range, time::SystemTime};
+
+/// How far each level of the tree steps in.
+const INDENT: f32 = 12.;
+
+/// One row of the list.
+enum Item<'a> {
+    Heading(&'static str),
+    Change(&'a Change),
+    Node(Row),
+}
+
+impl HerdrWindow {
+    /// The section's column, `width` wide with rows `row_height` tall.
+    pub(crate) fn render_files(
+        &self,
+        width: f32,
+        row_height: f32,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        let theme = &self.theme;
+        let font = &self.config.sidebar;
+        let column = div()
+            .id("files")
+            .debug_selector(|| "files".into())
+            .role(Role::Navigation)
+            .aria_label("Files")
+            .w(px(width))
+            .flex_none()
+            .h_full()
+            .min_h_0()
+            .overflow_hidden()
+            .flex()
+            .flex_col()
+            .text_font(font)
+            .text_size(px(font.size - 1.))
+            .text_color(rgb(theme.foreground))
+            .bg(self.fill().panel(theme.sidebar_background()))
+            .border_r_1()
+            .border_color(rgb(theme.active))
+            .child(self.files_header(cx));
+        let message = match &self.files.status {
+            Status::Idle => Some("Focus a pane to see the files it works on.".to_owned()),
+            Status::Reading => Some("Reading…".to_owned()),
+            Status::Remote => Some(
+                "Files lists this computer's checkouts; this pane runs on another host.".into(),
+            ),
+            Status::Failed(error) => Some(format!(
+                "No Git checkout to list at {}\n\n{error}",
+                self.files.followed().unwrap_or("this folder")
+            )),
+            Status::Ready => None,
+        };
+        if let Some(message) = message {
+            return column.child(
+                div()
+                    .debug_selector(|| "files-message".into())
+                    .p_3()
+                    .text_color(rgb(theme.muted))
+                    .child(message),
+            );
+        }
+        let count = self.files_items_len();
+        column.child(
+            uniform_list(
+                "files-list",
+                count,
+                cx.processor(move |this, range: Range<usize>, _, cx| {
+                    range
+                        .filter_map(|item| this.files_row(item, row_height, cx))
+                        .collect()
+                }),
+            )
+            .track_scroll(&self.files.scroll)
+            .flex_1()
+            .min_h_0()
+            .pb_2(),
+        )
+    }
+
+    fn files_header(&self, cx: &mut Context<Self>) -> Div {
+        let theme = &self.theme;
+        let name = self
+            .files
+            .root()
+            .and_then(|root| root.file_name())
+            .map(|name| name.to_string_lossy().into_owned());
+        let pinned = self.files.pinned;
+        let (foreground, surface) = (theme.foreground, theme.surface);
+        let button = |id: &'static str, icon: &'static str, color: u32, hint: &'static str| {
+            div()
+                .id(id)
+                .debug_selector(move || id.into())
+                .flex_none()
+                .p(px(3.))
+                .rounded_sm()
+                .cursor_pointer()
+                .hover(|style| style.bg(rgb(theme.active)))
+                .child(svg().path(icon).size(px(12.)).text_color(rgb(color)))
+                .tooltip(move |_, cx| {
+                    cx.new(|_| crate::menu::SettingsHint {
+                        text: hint.into(),
+                        foreground,
+                        surface,
+                    })
+                    .into()
+                })
+        };
+        div()
+            .flex_none()
+            .px_3()
+            .py_1()
+            .flex()
+            .items_center()
+            .gap_1()
+            .border_b_1()
+            .border_color(rgb(theme.active))
+            .child(
+                div()
+                    .flex_none()
+                    .max_w(relative(0.6))
+                    .truncate()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .children(name),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_color(rgb(theme.muted))
+                    .children(self.files.here.as_ref().map(|here| format!("/ {here}"))),
+            )
+            .child(
+                button(
+                    "files-collapse",
+                    "icons/chevron-up.svg",
+                    theme.muted,
+                    "Collapse folders",
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.files.collapse_all();
+                    cx.notify();
+                })),
+            )
+            .child(
+                button(
+                    "files-pin",
+                    "icons/lock.svg",
+                    if pinned { theme.primary() } else { theme.muted },
+                    if pinned {
+                        "Pinned here: follow the focused pane again"
+                    } else {
+                        "Following the focused pane: pin it here"
+                    },
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.toggle_files_pin(cx))),
+            )
+    }
+
+    /// The changed files' heading and rows, when there are any, then the
+    /// tree's.
+    fn files_items_len(&self) -> usize {
+        let recent = self.files.recent().len();
+        let changed = if recent > 0 { recent + 2 } else { 0 };
+        changed + self.files.rows.len()
+    }
+
+    fn files_item(&self, item: usize) -> Option<Item<'_>> {
+        let recent = self.files.recent();
+        if recent.is_empty() {
+            return self.files.rows.get(item).copied().map(Item::Node);
+        }
+        match item {
+            0 => Some(Item::Heading("Changed")),
+            item if item <= recent.len() => recent.get(item - 1).map(Item::Change),
+            item if item == recent.len() + 1 => Some(Item::Heading("Files")),
+            item => self
+                .files
+                .rows
+                .get(item - recent.len() - 2)
+                .copied()
+                .map(Item::Node),
+        }
+    }
+
+    fn files_row(
+        &self,
+        item: usize,
+        row_height: f32,
+        cx: &mut Context<Self>,
+    ) -> Option<AnyElement> {
+        let theme = &self.theme;
+        let listing = self.files.listing.as_ref()?;
+        let row = div()
+            .id(("files-row", item))
+            .h(px(row_height))
+            .px_2()
+            .flex()
+            .items_center()
+            .gap(px(5.));
+        Some(match self.files_item(item)? {
+            Item::Heading(label) => row
+                .debug_selector(|| "files-heading".into())
+                .pt_1()
+                .text_size(px(self.config.sidebar.size - 2.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(rgb(theme.subtext()))
+                .child(label.to_uppercase())
+                .into_any_element(),
+            Item::Change(change) => {
+                let name = listing.index.files().get(change.file)?;
+                let (folder, leaf) = name.rsplit_once('/').unwrap_or(("", name));
+                let now = SystemTime::now();
+                let age = change.modified.map(|modified| {
+                    let ms = |time: SystemTime| {
+                        time.duration_since(SystemTime::UNIX_EPOCH)
+                            .map_or(0, |since| u64::try_from(since.as_millis()).unwrap_or(0))
+                    };
+                    crate::remote::ago(ms(modified), ms(now))
+                });
+                self.files_file_row(row, name, Some(change), cx)
+                    .debug_selector(|| "files-change".into())
+                    .child(
+                        div()
+                            .flex_none()
+                            .max_w(relative(0.6))
+                            .truncate()
+                            .child(leaf.to_owned()),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_color(rgb(theme.muted))
+                            .child(folder.to_owned()),
+                    )
+                    .children(age.map(|age| {
+                        div()
+                            .flex_none()
+                            .text_size(px(self.config.sidebar.size - 2.))
+                            .text_color(rgb(theme.muted))
+                            .child(age)
+                    }))
+                    .child(self.files_change_mark(Some(change)))
+                    .into_any_element()
+            }
+            Item::Node(Row { node: id, depth }) => {
+                let node = listing.tree.node(id)?;
+                let indent = f32::from(depth) * INDENT;
+                match node.entry {
+                    Entry::Folder(_) => {
+                        let open = self.files.is_open(&node.path);
+                        let here = self.files.here.as_deref() == Some(node.path.as_str());
+                        let path = node.path.clone();
+                        row.debug_selector(|| "files-folder".into())
+                            .pl(px(8. + indent))
+                            .cursor_pointer()
+                            .hover(|style| style.bg(rgb(theme.active)))
+                            .child(
+                                svg()
+                                    .path(if open {
+                                        "icons/chevron-down.svg"
+                                    } else {
+                                        "icons/chevron-right.svg"
+                                    })
+                                    .size(px(10.))
+                                    .flex_none()
+                                    .text_color(rgb(theme.muted)),
+                            )
+                            .child(
+                                svg()
+                                    .path("icons/folder.svg")
+                                    .size(px(12.))
+                                    .flex_none()
+                                    .text_color(rgb(if here {
+                                        theme.primary()
+                                    } else {
+                                        theme.muted
+                                    })),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .when(here, |name| {
+                                        name.text_color(rgb(theme.primary()))
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                    })
+                                    .child(node.name.clone()),
+                            )
+                            .when(node.changed > 0, |row| {
+                                row.child(
+                                    div()
+                                        .flex_none()
+                                        .text_size(px(self.config.sidebar.size - 2.))
+                                        .text_color(rgb(theme.ink(theme.palette[3])))
+                                        .child(node.changed.to_string()),
+                                )
+                            })
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.files.toggle(&path);
+                                cx.notify();
+                            }))
+                            .into_any_element()
+                    }
+                    Entry::File(file) => {
+                        let change = listing.index.change(file);
+                        // Past the chevron's room, so files line up with
+                        // their folder's name.
+                        self.files_file_row(row.pl(px(23. + indent)), &node.path, change, cx)
+                            .debug_selector(|| "files-file".into())
+                            .child(div().flex_1().min_w_0().truncate().child(node.name.clone()))
+                            .child(self.files_change_mark(change))
+                            .into_any_element()
+                    }
+                }
+            }
+        })
+    }
+
+    /// `row` as a file's: its icon, its name's color for its change, the
+    /// selection, and the click that opens it.
+    fn files_file_row(
+        &self,
+        row: Stateful<Div>,
+        path: &str,
+        change: Option<&Change>,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        let theme = &self.theme;
+        let selected = self.files.selected.as_deref() == Some(path);
+        let color = match change {
+            Some(change) if change.new => theme.ink(theme.palette[2]),
+            Some(_) => theme.ink(theme.palette[3]),
+            None => theme.foreground,
+        };
+        let opened = path.to_owned();
+        row.cursor_pointer()
+            .text_color(rgb(color))
+            .when(selected, |row| row.bg(rgb(theme.active)))
+            .hover(|style| style.bg(rgb(theme.active)))
+            .child(
+                svg()
+                    .path("icons/file.svg")
+                    .size(px(12.))
+                    .flex_none()
+                    .text_color(rgb(theme.muted)),
+            )
+            .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                this.open_files_entry(&opened, event.modifiers().secondary(), window, cx);
+            }))
+    }
+
+    /// A changed file's lines added and removed, or that it is new.
+    fn files_change_mark(&self, change: Option<&Change>) -> Div {
+        let theme = &self.theme;
+        let mark = div()
+            .flex_none()
+            .text_size(px(self.config.sidebar.size - 2.));
+        match change {
+            Some(change) if change.new => {
+                mark.text_color(rgb(theme.ink(theme.palette[2]))).child("U")
+            }
+            Some(Change {
+                counts: Some((added, removed)),
+                ..
+            }) => mark
+                .flex()
+                .gap_1()
+                .child(
+                    div()
+                        .text_color(rgb(theme.ink(theme.palette[2])))
+                        .child(format!("+{added}")),
+                )
+                .child(
+                    div()
+                        .text_color(rgb(theme.ink(theme.palette[1])))
+                        .child(format!("−{removed}")),
+                ),
+            Some(_) => mark.text_color(rgb(theme.ink(theme.palette[3]))).child("M"),
+            None => mark,
+        }
+    }
+
+    /// Opens `path`, relative to the shown checkout, in a code tab, or with
+    /// `in_editor` in the terminal editor beside the focused pane.
+    fn open_files_entry(
+        &mut self,
+        path: &str,
+        in_editor: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(root) = self.files.root() else {
+            return;
+        };
+        let target = EditorTarget {
+            path: root.join(path),
+            line: None,
+        };
+        self.files.selected = Some(path.to_owned());
+        if in_editor {
+            self.open_in_editor(&target, None, cx);
+        } else {
+            self.open_code_view(&target, window, cx);
+        }
+        cx.notify();
+    }
+}

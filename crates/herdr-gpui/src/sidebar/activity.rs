@@ -1,6 +1,7 @@
 //! The activity bar: an icon column at the window's left edge that picks
 //! what the window shows. Workspaces is the sidebar beside the terminals, as
-//! it was; every other section takes the window's body, keeping the bar,
+//! it was, and Files the focused pane's checkout as a tree in its place
+//! (`crate::files`); every other section takes the window's body, keeping the bar,
 //! title bar, and status bar: Overview what needs the user on every host
 //! (`crate::overview`), Changes the uncommitted files and recent commits of
 //! every checkout on this machine (`crate::changes`), Orchestrator, Pull
@@ -49,6 +50,7 @@ fn label(panel: ActivityPanel) -> &'static str {
     match panel {
         ActivityPanel::Overview => "Overview",
         ActivityPanel::Changes => "Changes",
+        ActivityPanel::Files => "Files",
         ActivityPanel::Workspaces => "Workspaces",
         ActivityPanel::PullRequests => "Pull requests",
         ActivityPanel::Issues => "Issues",
@@ -61,6 +63,7 @@ fn icon(panel: ActivityPanel) -> &'static str {
     match panel {
         ActivityPanel::Overview => "icons/pulse.svg",
         ActivityPanel::Changes => "icons/git-branch.svg",
+        ActivityPanel::Files => "icons/folder.svg",
         ActivityPanel::Workspaces => "icons/terminal.svg",
         ActivityPanel::PullRequests => "icons/pull-request.svg",
         ActivityPanel::Issues => "icons/issue.svg",
@@ -251,12 +254,19 @@ impl HerdrWindow {
         }
     }
 
-    /// The section that takes the window's body, if one other than
-    /// Workspaces is shown. Zen mode keeps the terminals.
+    /// The section that takes the window's body, if one other than the
+    /// columns beside the terminals is shown. Zen mode keeps the terminals.
     pub(crate) fn activity_section(&self) -> Option<ActivityPanel> {
         self.activity_bar_leads()
             .then(|| self.activity_panel())
-            .filter(|panel| *panel != ActivityPanel::Workspaces)
+            .filter(|panel| !beside_terminals(*panel))
+    }
+
+    /// Whether the Files tree is on screen beside the terminals.
+    pub(crate) fn files_shown(&self) -> bool {
+        self.activity_bar_leads()
+            && self.activity_panel() == ActivityPanel::Files
+            && self.sidebar_mode() == SidebarMode::Expanded
     }
 
     /// The left column's width: the bar alone beside a section, else the
@@ -281,10 +291,7 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if panel == ActivityPanel::Workspaces
-            && self.activity_panel() == panel
-            && self.sidebar_visible
-        {
+        if beside_terminals(panel) && self.activity_panel() == panel && self.sidebar_visible {
             self.toggle_sidebar();
             cx.notify();
         } else {
@@ -303,7 +310,7 @@ impl HerdrWindow {
         if !self.activity_panel_listed(panel) {
             return;
         }
-        if panel == ActivityPanel::Workspaces && !self.sidebar_visible {
+        if beside_terminals(panel) && !self.sidebar_visible {
             self.toggle_sidebar();
         }
         // A section picked is where the user is now, not a place to go back to.
@@ -339,7 +346,7 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let section = match self.activity_section()? {
-            ActivityPanel::Workspaces => return None,
+            ActivityPanel::Workspaces | ActivityPanel::Files => return None,
             ActivityPanel::Overview => self.render_overview(cx),
             ActivityPanel::Changes => self.render_changes_section(cx),
             ActivityPanel::Security => self.render_security_section(window, cx),
@@ -382,7 +389,15 @@ impl HerdrWindow {
         if self.activity_section().is_some() {
             return column;
         }
+        let files = self.activity_panel() == ActivityPanel::Files;
         let sidebar = match self.sidebar_mode() {
+            SidebarMode::Expanded if files => {
+                let width = super::metrics::sidebar_width(
+                    self.sidebar_width,
+                    f32::from(window.viewport_size().width),
+                );
+                self.render_files(width, line_height(&self.config.sidebar) + 4., cx)
+            }
             SidebarMode::Expanded => self.render_sidebar(indicators, window, cx),
             // A window too narrow for the rail keeps the bar alone, which
             // still brings the sidebar back.
@@ -401,7 +416,14 @@ impl HerdrWindow {
                 .flex_col()
                 .h_full()
                 .min_h_0()
-                .child(self.panel_title(ActivityPanel::Workspaces, cx))
+                .child(self.panel_title(
+                    if files {
+                        ActivityPanel::Files
+                    } else {
+                        ActivityPanel::Workspaces
+                    },
+                    cx,
+                ))
                 .child(div().flex().flex_1().min_h_0().child(sidebar)),
         )
     }
@@ -633,6 +655,12 @@ impl HerdrWindow {
     }
 }
 
+/// Whether `panel` is a column beside the terminals, as the sidebar is,
+/// rather than a section across the window's body.
+fn beside_terminals(panel: ActivityPanel) -> bool {
+    matches!(panel, ActivityPanel::Workspaces | ActivityPanel::Files)
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum BarState {
     Selected,
@@ -651,6 +679,7 @@ fn panel_selector(panel: ActivityPanel) -> &'static str {
     match panel {
         ActivityPanel::Overview => "activity-overview",
         ActivityPanel::Changes => "activity-changes",
+        ActivityPanel::Files => "activity-files",
         ActivityPanel::Workspaces => "activity-workspaces",
         ActivityPanel::PullRequests => "activity-pull-requests",
         ActivityPanel::Issues => "activity-issues",

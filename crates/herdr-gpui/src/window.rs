@@ -198,6 +198,9 @@ pub(crate) struct HerdrWindow {
     /// dialog so the lanes can be compared later.
     pub(crate) fan_out: Option<crate::fan_out::FanOut>,
     pub(crate) file_transfer: Option<transfers::FileTransfer>,
+    /// The activity bar's Files section: the focused pane's checkout as a
+    /// tree beside the terminals.
+    pub(crate) files: crate::files::Files,
     /// The find bar, over the pane it searches.
     pub(crate) find: Option<find::FindBar>,
     /// How the find bar was left over each pane, to bring it back there.
@@ -671,6 +674,7 @@ impl HerdrWindow {
         self.poll_devices_overview(cx);
         self.poll_overview(cx);
         self.poll_changes(cx);
+        self.poll_files(cx);
         self.poll_context_strip(cx);
         self.poll_security(cx);
         self.poll_automations(cx);

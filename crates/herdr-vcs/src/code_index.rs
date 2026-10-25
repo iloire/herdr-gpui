@@ -60,6 +60,43 @@ pub struct Index {
 impl Index {
     /// Lists and scans the checkout at `root`. Blocking.
     pub fn build(root: &Path, cancelled: &AtomicBool) -> crate::Result<Self> {
+        let mut index = Self::list(root, cancelled)?;
+        let stop = || cancelled.load(Ordering::Acquire);
+        let mut real = HashSet::new();
+        for file in 0..index.files.len() {
+            if stop() {
+                return Err(Error::Cancelled.into());
+            }
+            if index.symbols.len() >= MAX_SYMBOLS {
+                index.truncated = true;
+                break;
+            }
+            let Some(language) = Language::of(&index.files[file]) else {
+                continue;
+            };
+            if !real_folders(root, &index.files[file], &mut real) {
+                continue;
+            }
+            let Some(text) = read_source(&root.join(&index.files[file])) else {
+                continue;
+            };
+            let room = MAX_PER_FILE.min(MAX_SYMBOLS - index.symbols.len());
+            index
+                .symbols
+                .extend(scan(language, &text, room).into_iter().map(|found| Symbol {
+                    name: found.name,
+                    kind: found.kind,
+                    file,
+                    line: found.line,
+                }));
+        }
+        Ok(index)
+    }
+
+    /// Lists the checkout at `root` and its uncommitted changes, without
+    /// scanning any file for definitions: cheap enough to read again every
+    /// few seconds. Blocking.
+    pub fn list(root: &Path, cancelled: &AtomicBool) -> crate::Result<Self> {
         let checkout = root.to_str().ok_or(Error::Root)?;
         let stop = || cancelled.load(Ordering::Acquire);
         let git = |args: &[&str], operation| {
@@ -103,34 +140,6 @@ impl Index {
             .collect();
         untracked.sort_unstable();
         index.set_changes(changes::collect(root, &index.files, &counts, &untracked));
-        let mut real = HashSet::new();
-        for file in 0..index.files.len() {
-            if stop() {
-                return Err(Error::Cancelled.into());
-            }
-            if index.symbols.len() >= MAX_SYMBOLS {
-                index.truncated = true;
-                break;
-            }
-            let Some(language) = Language::of(&index.files[file]) else {
-                continue;
-            };
-            if !real_folders(root, &index.files[file], &mut real) {
-                continue;
-            }
-            let Some(text) = read_source(&root.join(&index.files[file])) else {
-                continue;
-            };
-            let room = MAX_PER_FILE.min(MAX_SYMBOLS - index.symbols.len());
-            index
-                .symbols
-                .extend(scan(language, &text, room).into_iter().map(|found| Symbol {
-                    name: found.name,
-                    kind: found.kind,
-                    file,
-                    line: found.line,
-                }));
-        }
         Ok(index)
     }
 

@@ -188,6 +188,7 @@ impl HerdrWindow {
             )],
             fan_out: None,
             file_transfer: None,
+            files: Default::default(),
             find: None,
             find_memory: Default::default(),
             flash: None,

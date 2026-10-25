@@ -220,6 +220,7 @@ for what only Herdr UI shows or keeps.
 | Show the user an alert's or a vulnerability report's page in Herdr UI | `herdr-gpui security open OWNER/NAME 42` or `... GHSA-xxxx-xxxx-xxxx` |
 | Ask the user to approve an automation script you wrote (the app shows its plan; the user approves) | `herdr-gpui automation approve .herdr/automations/nightly.luau` |
 | Show the Automations section: every host's scripts and runs | `herdr-gpui ui panel automations` |
+| Show the Files tree of the focused pane's checkout beside the terminals | `herdr-gpui ui panel files` |
 | Open a dev server in a tab, forwarded when you run on an SSH host | `herdr-gpui ports open 3000` |
 | See the processes under a pane, with CPU and memory | `herdr-gpui processes` |
 | Start a chat with another agent in a new tab, shown as a native chat view | `herdr-gpui chat new claude`, then `herdr-gpui chat` for its status |

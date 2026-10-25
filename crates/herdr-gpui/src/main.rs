@@ -63,6 +63,7 @@ mod editor;
 mod endpoint;
 mod error;
 mod fan_out;
+mod files;
 mod find;
 mod folder;
 mod font_picker;

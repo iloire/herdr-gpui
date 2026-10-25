@@ -324,3 +324,15 @@ fn a_checkout_without_commits_lists_its_files_as_new() {
     assert_eq!(index.changes().len(), 1);
     assert!(index.changes()[0].new);
 }
+
+#[test]
+fn a_listing_reads_files_and_changes_but_no_definitions() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    git(root, &["init", "-q"]);
+    std::fs::write(root.join("lib.rs"), "pub fn listed() {}\n").unwrap();
+    let index = Index::list(root, &AtomicBool::new(false)).unwrap();
+    assert_eq!(index.files(), ["lib.rs"]);
+    assert_eq!(index.changes().len(), 1);
+    assert!(index.symbols().is_empty());
+}
