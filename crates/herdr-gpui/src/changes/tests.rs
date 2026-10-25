@@ -367,3 +367,5 @@ fn a_peek_reads_one_files_uncommitted_lines() {
     };
     assert!(peek(&moved, "a", 40).is_err());
 }
+
+mod review;

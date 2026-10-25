@@ -2994,8 +2994,10 @@ the titlebar's Git menu where its button would.
   switch. Its lines carry the numbers they had in the commit, the lines
   shown above a hunk come from the commit too, and notes tell the agent
   which commit they count in. It is read once: the checkout may change or
-  switch branch since without affecting it. Clicking the same commit again
-  brings back its tab.
+  switch branch since without affecting it. The review takes the window
+  from the Changes section, and Back returns to it. A checkout's commits
+  share one tab, which moves to each commit clicked, unless notes wait to be
+  sent there; then the next commit opens beside it.
 - **Uncommitted** shows what is not committed yet (`git diff HEAD`).
   **Branch** shows everything the branch's pull request will hold: the
   working tree against where the branch left its base, so its commits and

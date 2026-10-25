@@ -432,7 +432,14 @@ impl HerdrWindow {
             branch,
             checkout: Some(checkout.path.clone()),
         };
-        self.open_review_of(target, commit, 0, workspace, agent, file, window, cx);
+        if self.open_review_of(target, commit, 0, workspace, agent, file, window, cx) {
+            // The tab is in the workspace's view, which the section covers;
+            // Back returns here.
+            self.activity.pick(ActivityPanel::Workspaces);
+            self.activity.return_to = Some(ActivityPanel::Changes);
+            self.save_chrome();
+            cx.notify();
+        }
     }
 
     /// Shows workspace `id` of this machine with its terminals.

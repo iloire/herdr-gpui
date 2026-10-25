@@ -139,3 +139,26 @@ fn a_commit_opens_in_its_own_tab_and_stays_on_it(cx: &mut gpui::TestAppContext) 
     });
     assert_eq!(reviews, 2);
 }
+
+#[gpui::test]
+fn a_commit_tab_with_notes_waiting_is_never_taken_over(cx: &mut gpui::TestAppContext) {
+    let root = tempfile::tempdir().unwrap();
+    let (checkout, commit) = repository(root.path());
+    let parent = CommitId::try_from(git(root.path(), &["rev-parse", "HEAD~1"])).unwrap();
+    let (view, cx) = window(cx, None);
+    let first = open(&view, cx, &checkout, Some(&commit));
+    // A note queued on the first commit, not sent yet.
+    cx.update(|_, cx| {
+        view.update(cx, |view, _| {
+            let anchor = crate::review::diff::Anchor::File {
+                path: "added.rs".into(),
+            };
+            let note = crate::review::notes::Note::new(anchor, "Why?").unwrap();
+            view.reviews.get_mut(&first).unwrap().notes.push(note);
+        })
+    });
+    let second = open(&view, cx, &checkout, Some(&parent));
+    assert_ne!(second, first, "the note keeps its tab");
+    assert_eq!(files(&view, cx, first), ["added.rs"]);
+    assert_eq!(files(&view, cx, second), ["base.rs"]);
+}
