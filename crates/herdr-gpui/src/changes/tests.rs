@@ -1,8 +1,10 @@
 #![allow(clippy::unwrap_used)]
 
-use super::{Changes, Rank, Read, Workspace, group, rank, repo_name, section::age};
-use herdr_vcs::changes::{Checkout, FileChange, Kind};
-use std::time::Duration;
+use super::{
+    Changes, Rank, Read, Shown, Targets, Workspace, discover, group, rank, repo_name, section::age,
+};
+use herdr_vcs::changes::{Checkout, FileChange, Kind, Unmerged};
+use std::{path::Path, process::Command, time::Duration};
 
 fn workspace(id: &str) -> Workspace {
     Workspace {
@@ -31,6 +33,13 @@ fn dirty(mut checkout: Checkout) -> Checkout {
     checkout
 }
 
+fn shown(checkout: Checkout, workspaces: &[&str]) -> Shown {
+    Shown {
+        checkout,
+        workspaces: workspaces.iter().map(|id| workspace(id)).collect(),
+    }
+}
+
 #[test]
 fn a_checkout_ranks_by_what_it_asks_of_the_user() {
     let clean = checkout("/r", "/r/.git");
@@ -40,78 +49,84 @@ fn a_checkout_ranks_by_what_it_asks_of_the_user() {
         ..clean.clone()
     };
     assert_eq!(rank(&behind), Rank::Behind);
+    let unmerged = Checkout {
+        unmerged: Some(Unmerged {
+            base: "origin/main".into(),
+            count: 2,
+        }),
+        ..behind.clone()
+    };
+    assert_eq!(rank(&unmerged), Rank::Unmerged);
     let unpushed = Checkout {
         ahead: 1,
-        ..behind.clone()
+        ..unmerged.clone()
     };
     assert_eq!(rank(&unpushed), Rank::Unpushed);
     assert_eq!(rank(&dirty(unpushed)), Rank::Dirty);
+    // Merged into the default branch already: nothing to do.
+    let merged = Checkout {
+        unmerged: Some(Unmerged {
+            base: "origin/main".into(),
+            count: 0,
+        }),
+        ..clean
+    };
+    assert_eq!(rank(&merged), Rank::Clean);
 }
 
 #[test]
 fn worktrees_group_under_their_repository_and_what_needs_work_leads() {
-    let read = group(vec![
-        (
-            workspace("1"),
-            Ok(checkout("/code/zeta", "/code/zeta/.git")),
-        ),
-        (workspace("2"), Ok(checkout("/code/app", "/code/app/.git"))),
-        (
-            workspace("3"),
-            Ok(dirty(checkout("/code/app-feature", "/code/app/.git"))),
-        ),
-        (
-            workspace("4"),
-            Ok(Checkout {
+    let repos = group(vec![
+        shown(checkout("/code/zeta", "/code/zeta/.git"), &["1"]),
+        shown(checkout("/code/app", "/code/app/.git"), &["2"]),
+        shown(dirty(checkout("/code/app-feature", "/code/app/.git")), &[]),
+        shown(
+            Checkout {
                 ahead: 2,
                 ..checkout("/code/Beta", "/code/Beta/.git")
-            }),
-        ),
-        // A second workspace in a checkout already read joins it.
-        (
-            workspace("5"),
-            Ok(checkout("/code/zeta", "/code/zeta/.git")),
+            },
+            &["4"],
         ),
     ]);
-    let names: Vec<_> = read.repos.iter().map(|repo| repo.name.as_str()).collect();
+    let names: Vec<_> = repos.iter().map(|repo| repo.name.as_str()).collect();
     assert_eq!(names, ["app", "Beta", "zeta"]);
-    let app: Vec<_> = read.repos[0]
+    let app: Vec<_> = repos[0]
         .checkouts
         .iter()
         .map(|shown| shown.checkout.path.as_str())
         .collect();
     assert_eq!(app, ["/code/app-feature", "/code/app"]);
-    assert_eq!(
-        read.repos[2].checkouts[0].workspaces,
-        [workspace("1"), workspace("5")]
-    );
-    assert!(read.failed.is_empty());
 }
 
 #[test]
-fn a_failed_read_is_kept_beside_the_repositories() {
-    let error = herdr_vcs::Error::from(herdr_vcs::git::Error::NoCheckout);
-    let read = group(vec![
-        (workspace("1"), Err(error)),
-        (workspace("2"), Ok(checkout("/r", "/r/.git"))),
-    ]);
-    assert_eq!(read.repos.len(), 1);
-    assert_eq!(read.failed.len(), 1);
-    assert_eq!(read.failed[0].workspace, workspace("1"));
-}
-
-#[test]
-fn the_bar_counts_checkouts_with_uncommitted_work() {
+fn the_bar_counts_dirty_checkouts_and_the_filter_counts_clean_ones() {
     let mut changes = Changes::default();
-    assert_eq!(changes.dirty(), 0);
-    changes.read_for_test(group(vec![
-        (workspace("1"), Ok(dirty(checkout("/a", "/a/.git")))),
-        (workspace("2"), Ok(dirty(checkout("/a-2", "/a/.git")))),
-        (workspace("3"), Ok(checkout("/b", "/b/.git"))),
-    ]));
-    assert_eq!(changes.dirty(), 2);
+    assert_eq!((changes.dirty(), changes.clean()), (0, 0));
+    changes.read_for_test(Read {
+        repos: group(vec![
+            shown(dirty(checkout("/a", "/a/.git")), &["1"]),
+            shown(dirty(checkout("/a-2", "/a/.git")), &[]),
+            shown(checkout("/b", "/b/.git"), &["3"]),
+        ]),
+        failed: Vec::new(),
+    });
+    assert_eq!((changes.dirty(), changes.clean()), (2, 1));
     changes.read_for_test(Read::default());
     assert_eq!(changes.dirty(), 0);
+}
+
+#[test]
+fn an_open_folder_is_kept_once_with_every_workspace_open_in_it() {
+    let mut targets = Targets::default();
+    targets.add_open("/code/app", &workspace("1"));
+    targets.add_open("/code/app", &workspace("1"));
+    targets.add_open("/code/app", &workspace("2"));
+    targets.add_open("", &workspace("3"));
+    targets.add_open("relative", &workspace("3"));
+    assert_eq!(
+        targets.open,
+        [("/code/app".to_owned(), vec![workspace("1"), workspace("2")])]
+    );
 }
 
 #[test]
@@ -127,4 +142,120 @@ fn ages_read_in_minutes_hours_then_days() {
     assert_eq!(age(Duration::from_secs(5 * 60)), "5 min ago");
     assert_eq!(age(Duration::from_secs(47 * 3600)), "47 h ago");
     assert_eq!(age(Duration::from_secs(3 * 86_400)), "3 d ago");
+}
+
+fn git(directory: &Path, args: &[&str]) {
+    let result = Command::new("git")
+        .arg("-C")
+        .arg(directory)
+        .args([
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "core.hooksPath=/dev/null",
+        ])
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+}
+
+fn repository(path: &Path) {
+    std::fs::create_dir_all(path).unwrap();
+    git(path, &["init", "-q", "-b", "main"]);
+    std::fs::write(path.join("a"), "a\n").unwrap();
+    git(path, &["add", "a"]);
+    git(path, &["commit", "-qm", "first"]);
+}
+
+fn canonical(path: &str) -> std::path::PathBuf {
+    Path::new(path).canonicalize().unwrap()
+}
+
+#[test]
+fn a_pass_finds_panes_worktrees_named_repos_and_scanned_folders() {
+    let home = tempfile::tempdir().unwrap();
+    let root = home.path().join("code");
+    let app = root.join("app");
+    let lib = root.join("lib");
+    let notes = home.path().join("notes");
+    let linked = home.path().join("app-agent");
+    for path in [&app, &lib, &notes] {
+        repository(path);
+    }
+    git(
+        &app,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "agent",
+            linked.to_str().unwrap(),
+        ],
+    );
+    std::fs::write(linked.join("a"), "changed\n").unwrap();
+    std::fs::create_dir(app.join("src")).unwrap();
+    let outside = home.path().join("plain");
+    std::fs::create_dir(&outside).unwrap();
+    let mut targets = Targets {
+        repos: vec![notes.clone(), home.path().join("missing")],
+        roots: vec![root.clone()],
+        ..Targets::default()
+    };
+    // A pane deep in the checkout and one outside Git.
+    targets.add_open(app.join("src").to_str().unwrap(), &workspace("w1"));
+    targets.add_open(outside.to_str().unwrap(), &workspace("w2"));
+
+    let read = discover(&targets, &|| false);
+    let mut found: Vec<_> = read
+        .repos
+        .iter()
+        .flat_map(|repo| &repo.checkouts)
+        .map(|shown| {
+            (
+                canonical(&shown.checkout.path),
+                shown
+                    .workspaces
+                    .iter()
+                    .map(|workspace| workspace.id.as_str())
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect();
+    found.sort();
+    let mut expected = vec![
+        (app.canonicalize().unwrap(), vec!["w1"]),
+        (lib.canonicalize().unwrap(), vec![]),
+        (notes.canonicalize().unwrap(), vec![]),
+        // The worktree no pane is in comes from its repository.
+        (linked.canonicalize().unwrap(), vec![]),
+    ];
+    expected.sort();
+    assert_eq!(found, expected);
+    // The app repository leads: its worktree has uncommitted work.
+    assert_eq!(read.repos[0].name, "app");
+    assert_eq!(read.repos[0].checkouts[0].rank(), Rank::Dirty);
+    // Only what the config names reports a failure, not the plain pane.
+    let failed: Vec<_> = read.failed.iter().map(|failed| &failed.label).collect();
+    assert_eq!(failed.len(), 1);
+    assert!(failed[0].ends_with("missing"), "{failed:?}");
+}
+
+#[test]
+fn a_cancelled_pass_reads_nothing() {
+    let directory = tempfile::tempdir().unwrap();
+    repository(directory.path());
+    let mut targets = Targets::default();
+    targets.add_open(directory.path().to_str().unwrap(), &workspace("w1"));
+    let read = discover(&targets, &|| true);
+    assert!(read.repos.is_empty() && read.failed.is_empty());
 }

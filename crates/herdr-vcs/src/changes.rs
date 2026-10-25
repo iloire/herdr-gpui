@@ -1,17 +1,21 @@
-//! What a checkout holds right now, for the Changes section: its branch and
-//! how far it is from its upstream, the files with uncommitted changes and
-//! their line counts, and its latest commits. A few read-only Git children
-//! per checkout, run by the caller off the UI thread; nothing here contacts
-//! a remote, so ahead and behind are against the last fetch.
+//! What the checkouts on this machine hold right now, for the Changes
+//! section: finding the checkout a directory sits in, every worktree of a
+//! repository, and the repositories under a folder; then, per checkout, its
+//! branch and how far it is from its upstream, its commits not yet on the
+//! remote's default branch, the files with uncommitted changes and their
+//! line counts, and its latest commits. Read-only Git children run by the
+//! caller off the UI thread; nothing here contacts a remote, so every count
+//! is against the last fetch.
 
 use crate::git::git;
-use herdr_github::pull_request::{Input, local_checkout};
-use std::time::Instant;
+use std::{path::Path, time::Instant};
 
 /// Files listed per checkout; the rest are only counted.
 pub const MAX_FILES: usize = 50;
 /// Commits listed per checkout.
 pub const MAX_COMMITS: usize = 5;
+/// Repositories taken from one folder's scan.
+pub const MAX_SCANNED: usize = 200;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Checkout {
@@ -25,6 +29,10 @@ pub struct Checkout {
     pub upstream: Option<String>,
     pub ahead: u32,
     pub behind: u32,
+    /// Commits on HEAD that the remote's default branch lacks, when that
+    /// says more than `ahead` does: an agent's branch with no upstream, or
+    /// one whose upstream is not the default branch.
+    pub unmerged: Option<Unmerged>,
     /// The first [`MAX_FILES`] changed files, in Git's order.
     pub files: Vec<FileChange>,
     /// Every changed file, listed or not.
@@ -38,6 +46,11 @@ impl Checkout {
         self.total_files > 0
     }
 
+    /// Commits the default branch lacks, or 0.
+    pub fn unmerged_count(&self) -> u32 {
+        self.unmerged.as_ref().map_or(0, |unmerged| unmerged.count)
+    }
+
     /// Lines added and removed across the listed files.
     pub fn lines(&self) -> (u64, u64) {
         self.files.iter().fold((0, 0), |(added, removed), file| {
@@ -47,6 +60,13 @@ impl Checkout {
             )
         })
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Unmerged {
+    /// The remote's default branch, as `origin/main`.
+    pub base: String,
+    pub count: u32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -91,21 +111,92 @@ pub struct Commit {
     pub time: i64,
 }
 
-/// Reads `input`'s checkout, resolved and verified against its branch as
-/// every other read of a workspace's checkout is.
-pub fn read(
-    input: &Input,
+/// The checkout a directory sits in: its top level and the common
+/// directory its repository's worktrees share.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Located {
+    pub path: String,
+    pub common_dir: String,
+}
+
+/// The checkout `directory` is in, from any folder inside it. A directory
+/// outside Git, or in a bare repository, is an error.
+pub fn locate(
+    directory: &str,
     deadline: Instant,
     cancelled: &impl Fn() -> bool,
-) -> crate::Result<Checkout> {
-    let path = local_checkout(input, deadline, cancelled)?;
-    let common_dir = git(
-        &path,
-        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
-        "find the repository",
+) -> crate::Result<Located> {
+    let text = git(
+        directory,
+        &[
+            "rev-parse",
+            "--path-format=absolute",
+            "--show-toplevel",
+            "--git-common-dir",
+        ],
+        "find the checkout",
         deadline,
         cancelled,
     )?;
+    let mut lines = text.lines();
+    match (lines.next(), lines.next()) {
+        (Some(path), Some(common_dir)) if !path.is_empty() => Ok(Located {
+            path: path.to_owned(),
+            common_dir: common_dir.to_owned(),
+        }),
+        _ => Err(crate::git::Error::Failed {
+            operation: "find the checkout",
+            details: "not in a working tree".into(),
+        }
+        .into()),
+    }
+}
+
+/// Every worktree of the repository `checkout` belongs to, main checkout
+/// included, whose folder is still there.
+pub fn worktrees(
+    checkout: &str,
+    deadline: Instant,
+    cancelled: &impl Fn() -> bool,
+) -> crate::Result<Vec<String>> {
+    let text = git(
+        checkout,
+        &["worktree", "list", "--porcelain", "-z"],
+        "list worktrees",
+        deadline,
+        cancelled,
+    )?;
+    Ok(parse_worktrees(&text)
+        .into_iter()
+        .filter(|path| Path::new(path).is_dir())
+        .collect())
+}
+
+/// The repositories directly inside `root`: each folder holding a `.git`
+/// folder or file, sorted, at most [`MAX_SCANNED`]. Reads the folder only;
+/// no Git runs.
+pub fn repositories_in(root: &Path) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return Vec::new();
+    };
+    let mut found: Vec<String> = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.join(".git").exists())
+        .filter_map(|path| path.to_str().map(str::to_owned))
+        .collect();
+    found.sort_unstable();
+    found.truncate(MAX_SCANNED);
+    found
+}
+
+/// Reads the checkout at `located`.
+pub fn read(
+    located: Located,
+    deadline: Instant,
+    cancelled: &impl Fn() -> bool,
+) -> crate::Result<Checkout> {
+    let Located { path, common_dir } = located;
     let status = git(
         &path,
         &[
@@ -128,6 +219,7 @@ pub fn read(
         born,
     } = parse_status(&status);
     let mut commits = Vec::new();
+    let mut unmerged = None;
     // An unborn branch has no HEAD to count lines against or log from.
     if born {
         // Counts are a nicety: a failure keeps the files without them.
@@ -153,6 +245,25 @@ pub fn read(
             cancelled,
         )?;
         commits = parse_log(&log);
+        unmerged = default_branch(&path, deadline, cancelled)
+            // The branch tracking the default branch already says this
+            // through ahead.
+            .filter(|base| upstream.as_ref() != Some(base))
+            .and_then(|base| {
+                let range = format!("{base}..HEAD");
+                let count = git(
+                    &path,
+                    &["rev-list", "--count", &range],
+                    "count unmerged commits",
+                    deadline,
+                    cancelled,
+                )
+                .ok()?
+                .trim()
+                .parse()
+                .ok()?;
+                Some(Unmerged { base, count })
+            });
     }
     let total_files = files.len();
     files.truncate(MAX_FILES);
@@ -163,10 +274,63 @@ pub fn read(
         upstream,
         ahead,
         behind,
+        unmerged,
         files,
         total_files,
         commits,
     })
+}
+
+/// The remote's default branch as last fetched: what `origin/HEAD` names,
+/// else `origin/main` or `origin/master`, whichever exists.
+fn default_branch(path: &str, deadline: Instant, cancelled: &impl Fn() -> bool) -> Option<String> {
+    let named = git(
+        path,
+        &["rev-parse", "--abbrev-ref", "origin/HEAD"],
+        "find the default branch",
+        deadline,
+        cancelled,
+    )
+    .ok()
+    .filter(|name| !name.is_empty() && name != "origin/HEAD");
+    named.or_else(|| {
+        ["origin/main", "origin/master"]
+            .into_iter()
+            .find_map(|name| {
+                let reference = format!("refs/remotes/{name}");
+                git(
+                    path,
+                    &["rev-parse", "--verify", "--quiet", &reference],
+                    "find the default branch",
+                    deadline,
+                    cancelled,
+                )
+                .ok()
+                .map(|_| name.to_owned())
+            })
+    })
+}
+
+/// `git worktree list --porcelain -z`: each record's `worktree` path,
+/// leaving out bare repositories, which have no working tree.
+pub(crate) fn parse_worktrees(text: &str) -> Vec<String> {
+    let mut paths = Vec::new();
+    let mut current: Option<&str> = None;
+    let mut bare = false;
+    // Records end with an empty field.
+    for field in text.split('\0').chain(std::iter::once("")) {
+        if field.is_empty() {
+            if let Some(path) = current.take().filter(|_| !bare) {
+                paths.push(path.to_owned());
+            }
+            bare = false;
+        } else if let Some(path) = field.strip_prefix("worktree ") {
+            current = Some(path);
+        } else if field == "bare" {
+            bare = true;
+        }
+    }
+    paths
 }
 
 /// `git status --porcelain=v2 --branch -z`, before line counts and commits.

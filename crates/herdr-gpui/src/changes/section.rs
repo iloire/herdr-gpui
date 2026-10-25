@@ -1,6 +1,7 @@
 //! Drawing the Changes section from the last read: a card per repository,
 //! and in it each checkout's branch, its uncommitted files, and its latest
-//! commits. A checkout's header opens its workspace.
+//! commits. A checkout's header opens the workspace open in it, if any.
+//! Needs attention, the default, folds away the clean checkouts.
 
 use super::{Rank, Repo, Shown};
 use crate::HerdrWindow;
@@ -48,6 +49,7 @@ impl HerdrWindow {
                     .text_color(rgb(theme.muted))
                     .child(updated)
             }))
+            .child(self.changes_filter(cx))
             .child(
                 div()
                     .id("changes-section-refresh")
@@ -105,6 +107,42 @@ impl HerdrWindow {
             .into_any_element()
     }
 
+    /// Needs attention or All, as one control that names what it lists.
+    fn changes_filter(&self, cx: &mut Context<Self>) -> Stateful<Div> {
+        let theme = &self.theme;
+        let small = px(self.config.ui.size - 1.);
+        let option = |label: &'static str, picked: bool| {
+            div()
+                .px(px(8.))
+                .h_full()
+                .flex()
+                .items_center()
+                .rounded(px(crate::config::corners::CONTROL))
+                .when(picked, |el| {
+                    el.bg(rgb(theme.active)).text_color(rgb(theme.foreground))
+                })
+                .when(!picked, |el| el.text_color(rgb(theme.muted)))
+                .child(label)
+        };
+        div()
+            .id("changes-section-filter")
+            .debug_selector(|| "changes-section-filter".into())
+            .h(px(24.))
+            .p(px(2.))
+            .flex()
+            .rounded(px(crate::config::corners::CONTROL))
+            .border_1()
+            .border_color(rgb(theme.active))
+            .cursor_pointer()
+            .text_size(small)
+            .child(option("Needs attention", !self.changes.all))
+            .child(option("All", self.changes.all))
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.changes.all = !this.changes.all;
+                cx.notify();
+            }))
+    }
+
     fn changes_body(&self, cx: &mut Context<Self>) -> Div {
         let theme = &self.theme;
         let mut body = div().p_5().flex().flex_col().gap_5();
@@ -114,7 +152,8 @@ impl HerdrWindow {
             let text = if self.changes.busy() || self.changes.read_at().is_none() {
                 "Reading the checkouts…"
             } else {
-                "No workspace on this machine is in a Git checkout."
+                "No workspace or pane on this machine is in a Git checkout, and \
+                 [changes] names none."
             };
             return body.child(
                 div()
@@ -123,21 +162,59 @@ impl HerdrWindow {
                     .child(text),
             );
         }
+        let all = self.changes.all;
+        let mut listed = false;
         for (index, repo) in repos.iter().enumerate() {
-            body = body.child(self.changes_repo(index, repo, cx));
+            let shown: Vec<&Shown> = repo
+                .checkouts
+                .iter()
+                .filter(|shown| all || shown.rank() != Rank::Clean)
+                .collect();
+            if !shown.is_empty() {
+                listed = true;
+                body = body.child(self.changes_repo(index, repo, &shown, cx));
+            }
+        }
+        let clean = self.changes.clean();
+        if !all && clean > 0 {
+            let noun = if clean == 1 { "checkout" } else { "checkouts" };
+            let text = if listed {
+                format!("{clean} clean {noun} hidden · Show all")
+            } else {
+                format!("Nothing needs attention: {clean} {noun}, all clean · Show all")
+            };
+            body = body.child(
+                div()
+                    .id("changes-section-clean")
+                    .debug_selector(|| "changes-section-clean".into())
+                    .cursor_pointer()
+                    .text_color(rgb(theme.muted))
+                    .hover(|style| style.text_color(rgb(theme.foreground)))
+                    .child(text)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.changes.all = true;
+                        cx.notify();
+                    })),
+            );
         }
         for failure in failed {
             body = body.child(
                 div()
                     .debug_selector(|| "changes-section-failed".into())
                     .text_color(rgb(theme.ink(theme.palette[3])))
-                    .child(format!("{}: {}", failure.workspace.label, failure.error)),
+                    .child(format!("{}: {}", failure.label, failure.error)),
             );
         }
         body
     }
 
-    fn changes_repo(&self, index: usize, repo: &Repo, cx: &mut Context<Self>) -> Div {
+    fn changes_repo(
+        &self,
+        index: usize,
+        repo: &Repo,
+        shown: &[&Shown],
+        cx: &mut Context<Self>,
+    ) -> Div {
         let theme = &self.theme;
         let small = px(self.config.ui.size - 1.);
         let dirty = repo
@@ -155,7 +232,7 @@ impl HerdrWindow {
             .flex_col()
             .rounded(px(crate::config::corners::PANEL))
             .bg(rgb(theme.surface));
-        for (position, shown) in repo.checkouts.iter().enumerate() {
+        for (position, shown) in shown.iter().enumerate() {
             card = card.child(
                 self.changes_checkout(index, position, shown, cx)
                     .when(position > 0, |el| {
@@ -198,21 +275,28 @@ impl HerdrWindow {
         let theme = &self.theme;
         let small = px(self.config.ui.size - 1.);
         let checkout = &shown.checkout;
-        let (green, red, yellow) = (
+        let (green, red, yellow, blue) = (
             theme.ink(theme.palette[2]),
             theme.ink(theme.palette[1]),
             theme.ink(theme.palette[3]),
+            theme.ink(theme.palette[4]),
         );
         let branch = checkout
             .branch
             .clone()
             .unwrap_or_else(|| "detached HEAD".into());
-        let labels = shown
-            .workspaces
-            .iter()
-            .map(|workspace| workspace.label.as_str())
-            .collect::<Vec<_>>()
-            .join(", ");
+        // The workspaces open in it, else where it is: a worktree no pane
+        // is in any more.
+        let labels = if shown.workspaces.is_empty() {
+            home_relative(&checkout.path)
+        } else {
+            shown
+                .workspaces
+                .iter()
+                .map(|workspace| workspace.label.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
         let state = match super::rank(checkout) {
             Rank::Dirty => {
                 let (added, removed) = checkout.lines();
@@ -222,7 +306,7 @@ impl HerdrWindow {
                     .text_color(rgb(yellow))
                     .child(format!("+{added} −{removed} · {files} {noun}"))
             }
-            Rank::Unpushed | Rank::Behind | Rank::Clean => div()
+            Rank::Unpushed | Rank::Unmerged | Rank::Behind | Rank::Clean => div()
                 .text_color(rgb(theme.muted))
                 .child("No uncommitted changes"),
         };
@@ -241,8 +325,9 @@ impl HerdrWindow {
             .flex()
             .items_center()
             .gap_2()
-            .cursor_pointer()
-            .hover(move |style| style.bg(rgb(hover)))
+            .when(workspace.is_some(), |el| {
+                el.cursor_pointer().hover(move |style| style.bg(rgb(hover)))
+            })
             .child(
                 svg()
                     .path("icons/git-branch.svg")
@@ -264,6 +349,17 @@ impl HerdrWindow {
                         .text_color(rgb(green))
                         .child(format!("↑{}", checkout.ahead)),
                 )
+            })
+            .when_some(checkout.unmerged.as_ref(), |el, unmerged| {
+                el.when(unmerged.count > 0, |el| {
+                    el.child(
+                        div()
+                            .flex_none()
+                            .text_size(small)
+                            .text_color(rgb(blue))
+                            .child(format!("{} not on {}", unmerged.count, unmerged.base)),
+                    )
+                })
             })
             .when(checkout.behind > 0, |el| {
                 el.child(
@@ -394,6 +490,16 @@ impl HerdrWindow {
                     )),
             )
     }
+}
+
+/// `path` with the home folder written `~`.
+fn home_relative(path: &str) -> String {
+    herdr_client::local_path::home_dir()
+        .and_then(|home| {
+            let rest = std::path::Path::new(path).strip_prefix(&home).ok()?;
+            Some(format!("~/{}", rest.display()))
+        })
+        .unwrap_or_else(|| path.to_owned())
 }
 
 /// How long ago, to the minute while recent and to the day once old: a

@@ -1,27 +1,30 @@
-//! The activity bar's Changes section: what every workspace on this machine
+//! The activity bar's Changes section: what every checkout on this machine
 //! holds in Git right now. Each checkout lists its uncommitted files with
-//! their line counts, how far its branch is from its upstream, and its
-//! latest commits, grouped by repository so a repository's worktrees sit
-//! together. What needs the user leads: dirty checkouts, then unpushed, then
-//! behind, then clean.
+//! their line counts, how far its branch is from its upstream, its commits
+//! not yet on the remote's default branch, and its latest commits, grouped
+//! by repository so a repository's worktrees sit together. What needs the
+//! user leads: dirty checkouts, then unpushed, then unmerged, then behind;
+//! clean ones are folded away until All is picked.
 //!
-//! Only checkouts of this machine's own daemon are read, the same trust
-//! boundary the titlebar's Git chip keeps. A background read runs every
-//! [`SHOWN`] while the section is on screen and every [`HIDDEN`] otherwise,
-//! so the bar's count stays current; drawing reads what it left.
+//! The checkouts come from this machine's own daemon, the trust boundary
+//! the titlebar's Git chip keeps: every workspace's folder and every pane's
+//! working directory, then every other worktree of the repositories those
+//! are in, so a worktree an agent left behind still shows after its pane
+//! closed. `[changes]` adds checkouts and folders of repositories from the
+//! config (`discover`). A background pass runs every [`SHOWN`] while the
+//! section is on screen and every [`HIDDEN`] otherwise, so the bar's count
+//! stays current; drawing reads what it left.
 
+mod discover;
 mod section;
 
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    HerdrWindow,
-    pull_request::{Input, Origin, workspace_input},
-    sidebar::ActivityPanel,
-};
+use crate::{HerdrWindow, sidebar::ActivityPanel};
+pub(crate) use discover::{Targets, discover};
 use gpui::{prelude::*, *};
-use herdr_vcs::changes::{self, Checkout};
+use herdr_vcs::changes::Checkout;
 use std::{
     path::Path,
     sync::{
@@ -32,22 +35,18 @@ use std::{
 };
 
 /// How often to read again while the section is shown.
-const SHOWN: Duration = Duration::from_secs(10);
+const SHOWN: Duration = Duration::from_secs(15);
 /// How often to read again for the bar's count alone.
-const HIDDEN: Duration = Duration::from_secs(60);
-/// One checkout's Git children together, as the status chip allows.
-const TIMEOUT: Duration = Duration::from_secs(15);
-/// Checkouts read per pass, however many workspaces the daemon lists.
-const MAX_CHECKOUTS: usize = 64;
+const HIDDEN: Duration = Duration::from_secs(120);
 
-/// A workspace showing a checkout; several may share one.
+/// A workspace with a pane or its folder in a checkout.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Workspace {
     pub(crate) id: String,
     pub(crate) label: String,
 }
 
-/// A checkout as last read, and the workspaces in it.
+/// A checkout as last read, and the workspaces open in it, if any.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Shown {
     pub(crate) checkout: Checkout,
@@ -55,7 +54,7 @@ pub(crate) struct Shown {
 }
 
 impl Shown {
-    fn rank(&self) -> Rank {
+    pub(crate) fn rank(&self) -> Rank {
         rank(&self.checkout)
     }
 }
@@ -72,6 +71,7 @@ pub(crate) struct Repo {
 pub(crate) enum Rank {
     Dirty,
     Unpushed,
+    Unmerged,
     Behind,
     Clean,
 }
@@ -81,6 +81,8 @@ pub(crate) fn rank(checkout: &Checkout) -> Rank {
         Rank::Dirty
     } else if checkout.ahead > 0 {
         Rank::Unpushed
+    } else if checkout.unmerged_count() > 0 {
+        Rank::Unmerged
     } else if checkout.behind > 0 {
         Rank::Behind
     } else {
@@ -88,10 +90,10 @@ pub(crate) fn rank(checkout: &Checkout) -> Rank {
     }
 }
 
-/// A workspace whose checkout could not be read, and why.
+/// A checkout or folder the config names that could not be read, and why.
 #[derive(Debug)]
 pub(crate) struct Failed {
-    pub(crate) workspace: Workspace,
+    pub(crate) label: String,
     pub(crate) error: herdr_vcs::Error,
 }
 
@@ -110,9 +112,11 @@ pub(crate) struct Changes {
     /// When the next read is due; `None` reads at the next tick.
     next: Option<Instant>,
     task: Option<Task<()>>,
-    /// The checkouts the last read was asked for, so a workspace opened or
-    /// closed reads again at once rather than at the next interval.
-    inputs: Vec<Input>,
+    /// What the last read was asked for, so a workspace opened, a pane
+    /// moved to another folder, or the config changed reads again at once.
+    targets: Targets,
+    /// Whether clean checkouts are listed too.
+    pub(crate) all: bool,
     /// Tells a read in flight to stop when the window goes.
     cancelled: Arc<AtomicBool>,
     scroll: ScrollHandle,
@@ -125,7 +129,8 @@ impl Default for Changes {
             read_at: None,
             next: None,
             task: None,
-            inputs: Vec::new(),
+            targets: Targets::default(),
+            all: false,
             cancelled: Arc::default(),
             scroll: ScrollHandle::new(),
         }
@@ -165,6 +170,17 @@ impl Changes {
             .count()
     }
 
+    /// Checkouts that ask nothing of the user, folded away unless All is
+    /// picked.
+    pub(crate) fn clean(&self) -> usize {
+        self.read
+            .repos
+            .iter()
+            .flat_map(|repo| &repo.checkouts)
+            .filter(|shown| shown.rank() == Rank::Clean)
+            .count()
+    }
+
     /// Reads again at the next tick.
     pub(crate) fn refresh(&mut self) {
         self.next = None;
@@ -189,27 +205,9 @@ impl Changes {
     }
 }
 
-/// Groups what each workspace's read found by repository: workspaces in one
-/// checkout become one entry, and repositories and their checkouts are
-/// ordered by what they ask of the user, then by name and path.
-pub(crate) fn group(reads: Vec<(Workspace, Result<Checkout, herdr_vcs::Error>)>) -> Read {
-    let mut read = Read::default();
-    let mut shown: Vec<Shown> = Vec::new();
-    for (workspace, result) in reads {
-        match result {
-            Ok(checkout) => match shown
-                .iter_mut()
-                .find(|shown| shown.checkout.path == checkout.path)
-            {
-                Some(existing) => existing.workspaces.push(workspace),
-                None => shown.push(Shown {
-                    checkout,
-                    workspaces: vec![workspace],
-                }),
-            },
-            Err(error) => read.failed.push(Failed { workspace, error }),
-        }
-    }
+/// Groups checkouts by repository and orders repositories and their
+/// checkouts by what they ask of the user, then by name and path.
+pub(crate) fn group(shown: Vec<Shown>) -> Vec<Repo> {
     let mut repos: Vec<(String, Repo)> = Vec::new();
     for entry in shown {
         let common = entry.checkout.common_dir.clone();
@@ -233,8 +231,7 @@ pub(crate) fn group(reads: Vec<(Workspace, Result<Checkout, herdr_vcs::Error>)>)
         let first = |repo: &Repo| repo.checkouts.first().map_or(Rank::Clean, Shown::rank);
         (first(a), a.name.to_lowercase()).cmp(&(first(b), b.name.to_lowercase()))
     });
-    read.repos = repos;
-    read
+    repos
 }
 
 /// A repository's name from its common directory: the folder holding
@@ -256,17 +253,23 @@ pub(crate) fn repo_name(common_dir: &str) -> String {
 }
 
 impl HerdrWindow {
-    /// Whether the bar lists Changes and the section holds anything to read.
+    /// Whether the bar lists Changes, so there is a count to keep.
     fn changes_wanted(&self) -> bool {
         self.activity_bar_shown() && self.activity_panel_listed(ActivityPanel::Changes)
     }
 
-    /// Every workspace of this machine's own daemon that sits in a checkout
-    /// Git may read, whichever host the window shows. Empty when this
-    /// machine's daemon is not connected or not the user's own.
-    fn change_targets(&self) -> Vec<(Input, Workspace)> {
+    /// Where this pass looks: every workspace folder and pane directory of
+    /// this machine's own daemon, whichever host the window shows, and what
+    /// `[changes]` names. Nothing of the daemon when it is not connected or
+    /// not the user's own.
+    fn change_targets(&self) -> Targets {
+        let mut targets = Targets {
+            repos: self.config.changes.repo_paths(),
+            roots: self.config.changes.root_paths(),
+            ..Targets::default()
+        };
         let Some(endpoint) = self.endpoints.first() else {
-            return Vec::new();
+            return targets;
         };
         let live = if self.selected_endpoint == 0 {
             &self.live
@@ -274,35 +277,38 @@ impl HerdrWindow {
             &endpoint.live
         };
         if !endpoint.enabled || !live.local_daemon_peer || !live.status.is_connected() {
-            return Vec::new();
+            return targets;
         }
-        live.snapshot
-            .iter()
-            .flat_map(|snapshot| &snapshot.workspaces)
-            .filter_map(|workspace| {
-                let input = workspace_input(workspace, &Origin::Local).ok()?;
-                Some((
-                    input,
-                    Workspace {
-                        id: workspace.workspace_id.clone(),
-                        label: workspace.label.clone(),
-                    },
-                ))
-            })
-            .take(MAX_CHECKOUTS)
-            .collect()
+        let Some(snapshot) = live.snapshot.as_deref() else {
+            return targets;
+        };
+        for workspace in &snapshot.workspaces {
+            let shown = Workspace {
+                id: workspace.workspace_id.clone(),
+                label: workspace.label.clone(),
+            };
+            let panes = snapshot
+                .panes
+                .iter()
+                .filter(|pane| pane.workspace_id == workspace.workspace_id)
+                .flat_map(|pane| [pane.cwd.as_deref(), pane.foreground_cwd.as_deref()])
+                .flatten();
+            for directory in std::iter::once(workspace.new_workspace_cwd.as_str()).chain(panes) {
+                targets.add_open(directory, &shown);
+            }
+        }
+        targets
     }
 
-    /// Runs every tick: starts a read when one is due, or at once when the
-    /// workspaces changed since the last one.
+    /// Runs every tick: starts a pass when one is due, or at once when what
+    /// it would look at changed since the last one.
     pub(crate) fn poll_changes(&mut self, cx: &mut Context<Self>) {
         if !self.changes_wanted() {
             return;
         }
         let targets = self.change_targets();
-        let inputs: Vec<Input> = targets.iter().map(|(input, _)| input.clone()).collect();
-        if inputs != self.changes.inputs {
-            self.changes.inputs = inputs;
+        if targets != self.changes.targets {
+            self.changes.targets = targets.clone();
             self.changes.refresh();
         }
         let now = Instant::now();
@@ -320,18 +326,9 @@ impl HerdrWindow {
             return;
         }
         let cancelled = self.changes.cancelled.clone();
-        let work = cx.background_executor().spawn(async move {
-            let stop = || cancelled.load(Ordering::Relaxed);
-            let reads = targets
-                .into_iter()
-                .take_while(|_| !stop())
-                .map(|(input, workspace)| {
-                    let result = changes::read(&input, Instant::now() + TIMEOUT, &stop);
-                    (workspace, result)
-                })
-                .collect();
-            group(reads)
-        });
+        let work = cx
+            .background_executor()
+            .spawn(async move { discover(&targets, &|| cancelled.load(Ordering::Relaxed)) });
         self.changes.task = Some(cx.spawn(async move |this, cx| {
             let read = work.await;
             let _ = this.update(cx, |this, cx| {

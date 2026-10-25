@@ -13,6 +13,7 @@ mod azure;
 pub(crate) mod backdrop;
 mod bitmap_fonts;
 mod boat;
+mod changes;
 pub(crate) mod chat;
 mod cloud;
 mod coder;
@@ -62,6 +63,7 @@ mod zen;
 pub use accent::Accent;
 pub use agents_placement::AgentsPlacement;
 pub use backdrop::{Backdrop, Material};
+pub use changes::ChangesConfig;
 pub use chat::{ChatLauncher, ChatLayoutMode};
 pub use cloud::CloudConfig;
 #[cfg(test)]
@@ -166,6 +168,8 @@ pub struct Config {
     pub backdrop: Backdrop,
     pub bell: BellConfig,
     pub boat: BoatConfig,
+    /// What the Changes section reads besides the open checkouts.
+    pub changes: ChangesConfig,
     /// What chats started from the app run with.
     pub chat: chat::ChatConfig,
     /// Only the keys this GUI's own file sets, so Settings can tell an
@@ -386,6 +390,7 @@ impl Default for Config {
             backdrop: Backdrop::default(),
             bell: BellConfig::default(),
             boat: BoatConfig::default(),
+            changes: ChangesConfig::default(),
             chat: chat::ChatConfig::default(),
             clipboard_overrides: ClipboardToastSettings::default(),
             clipboard_toast: ClipboardToast::default(),
@@ -470,6 +475,7 @@ struct Settings {
     backdrop: Backdrop,
     bell: BellConfig,
     boat: BoatConfig,
+    changes: ChangesConfig,
     chat: chat::ChatConfig,
     clipboard_toast: ClipboardToastSettings,
     cloud: CloudConfig,
@@ -870,6 +876,7 @@ impl Config {
         config.contrast = settings.contrast;
         config.agents_placement = settings.agents_placement;
         config.usage = settings.usage;
+        config.changes = settings.changes;
         config.option_as_alt = settings.option_as_alt;
         config.open_links_in = settings.open_links_in;
         config.code = settings.code;

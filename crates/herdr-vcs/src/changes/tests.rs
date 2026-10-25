@@ -112,6 +112,15 @@ fn log_records_keep_subjects_with_separators_and_stop_at_the_limit() {
     assert!(parse_log("").is_empty());
 }
 
+fn deadline() -> Instant {
+    Instant::now() + Duration::from_secs(15)
+}
+
+fn read_at(path: &Path) -> crate::Result<Checkout> {
+    let located = locate(path.to_str().unwrap(), deadline(), &|| false)?;
+    read(located, deadline(), &|| false)
+}
+
 struct Repo {
     directory: tempfile::TempDir,
     hooks: tempfile::TempDir,
@@ -160,12 +169,7 @@ impl Repo {
     }
 
     fn read(&self) -> crate::Result<Checkout> {
-        let input = Input {
-            checkout: Some(self.path().to_str().unwrap().into()),
-            repo_key: None,
-            branch: "main".into(),
-        };
-        read(&input, Instant::now() + Duration::from_secs(15), &|| false)
+        read_at(self.path())
     }
 }
 
@@ -265,4 +269,128 @@ fn files_past_the_limit_are_counted_not_listed() {
     let checkout = repo.read().unwrap();
     assert_eq!(checkout.files.len(), MAX_FILES);
     assert_eq!(checkout.total_files, MAX_FILES + 3);
+}
+
+#[test]
+fn worktree_records_skip_bare_repositories() {
+    let text = [
+        "worktree /srv/bare.git",
+        "bare",
+        "",
+        "worktree /code/app",
+        "HEAD 0123",
+        "branch refs/heads/main",
+        "",
+        "worktree /code/app-feature",
+        "HEAD 4567",
+        "detached",
+        "",
+    ]
+    .join("\0");
+    assert_eq!(parse_worktrees(&text), ["/code/app", "/code/app-feature"]);
+    assert!(parse_worktrees("").is_empty());
+}
+
+#[test]
+fn a_subfolder_locates_its_checkout_and_every_worktree_is_found() {
+    let repo = Repo::new();
+    repo.write("a", "a\n");
+    repo.git(&["add", "a"]);
+    repo.git(&["commit", "-m", "first"]);
+    std::fs::create_dir(repo.path().join("sub")).unwrap();
+    let located = locate(
+        repo.path().join("sub").to_str().unwrap(),
+        deadline(),
+        &|| false,
+    )
+    .unwrap();
+    let canonical = |path: &str| Path::new(path).canonicalize().unwrap();
+    assert_eq!(
+        canonical(&located.path),
+        repo.path().canonicalize().unwrap()
+    );
+    let others = tempfile::tempdir().unwrap();
+    let linked = others.path().join("linked");
+    repo.git(&[
+        "worktree",
+        "add",
+        "-q",
+        "-b",
+        "agent",
+        linked.to_str().unwrap(),
+    ]);
+    let found: Vec<_> = worktrees(&located.path, deadline(), &|| false)
+        .unwrap()
+        .iter()
+        .map(|path| canonical(path))
+        .collect();
+    assert_eq!(
+        found,
+        [
+            repo.path().canonicalize().unwrap(),
+            linked.canonicalize().unwrap()
+        ]
+    );
+    // Both worktrees share one common directory, which names the repository.
+    let from_linked = locate(linked.to_str().unwrap(), deadline(), &|| false).unwrap();
+    assert_eq!(
+        canonical(&from_linked.common_dir),
+        canonical(&located.common_dir)
+    );
+    let outside = tempfile::tempdir().unwrap();
+    assert!(locate(outside.path().to_str().unwrap(), deadline(), &|| false).is_err());
+}
+
+#[test]
+fn a_folder_scan_finds_the_repositories_directly_inside_it() {
+    let root = tempfile::tempdir().unwrap();
+    for name in ["b-repo", "a-repo"] {
+        std::fs::create_dir_all(root.path().join(name).join(".git")).unwrap();
+    }
+    std::fs::create_dir(root.path().join("plain")).unwrap();
+    std::fs::create_dir_all(root.path().join("plain/nested/.git")).unwrap();
+    // A linked worktree's `.git` is a file.
+    std::fs::create_dir(root.path().join("linked")).unwrap();
+    std::fs::write(root.path().join("linked/.git"), "gitdir: x\n").unwrap();
+    let found: Vec<_> = repositories_in(root.path())
+        .iter()
+        .map(|path| {
+            Path::new(path)
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_owned()
+        })
+        .collect();
+    assert_eq!(found, ["a-repo", "b-repo", "linked"]);
+    assert!(repositories_in(&root.path().join("missing")).is_empty());
+}
+
+#[test]
+fn a_branch_without_upstream_counts_commits_missing_from_the_default_branch() {
+    let repo = Repo::new();
+    repo.write("a", "a\n");
+    repo.git(&["add", "a"]);
+    repo.git(&["commit", "-m", "first"]);
+    repo.git(&["remote", "add", "origin", "."]);
+    repo.git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    repo.git(&["switch", "-q", "-c", "agent/task"]);
+    for subject in ["one", "two"] {
+        repo.write("a", subject);
+        repo.git(&["commit", "-qam", subject]);
+    }
+    let checkout = repo.read().unwrap();
+    assert_eq!(checkout.upstream, None);
+    assert_eq!(
+        checkout.unmerged,
+        Some(Unmerged {
+            base: "origin/main".into(),
+            count: 2
+        })
+    );
+    // On the default branch itself, tracking it, ahead says it all.
+    repo.git(&["switch", "-q", "main"]);
+    repo.git(&["branch", "--set-upstream-to=origin/main"]);
+    assert_eq!(repo.read().unwrap().unmerged, None);
 }

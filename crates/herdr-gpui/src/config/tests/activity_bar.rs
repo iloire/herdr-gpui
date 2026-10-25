@@ -66,3 +66,19 @@ fn changes_pull_requests_and_issues_are_on_unless_turned_off() -> anyhow::Result
     }
     Ok(())
 }
+
+#[test]
+fn the_changes_table_names_repos_and_roots_with_home_expanded() -> anyhow::Result<()> {
+    assert_eq!(Config::default().changes, ChangesConfig::default());
+    let config = Config::parse(
+        "[changes]\nrepos = [\"~/notes\", \"/srv/app\", \"relative\"]\nroots = [\"~\"]",
+    )?;
+    let home = herdr_client::local_path::home_dir().ok_or_else(|| anyhow::anyhow!("no home"))?;
+    assert_eq!(
+        config.changes.repo_paths(),
+        [home.join("notes"), PathBuf::from("/srv/app")]
+    );
+    assert_eq!(config.changes.root_paths(), [home]);
+    assert!(Config::parse("[changes]\nroots = \"~/code\"").is_err());
+    Ok(())
+}

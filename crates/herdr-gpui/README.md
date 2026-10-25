@@ -2236,16 +2236,30 @@ window at once, and `herdr-gpui ui panel NAME` shows a section.
   column beside the list shows each host's CPU, memory, agents, and ports;
   each host folds, and the column folds to a strip of load dots. The icon
   counts what needs you.
-- **Changes** shows what every workspace on this machine holds in Git right
-  now, one card per repository with its worktrees together: each checkout's
-  branch with `↑`/`↓` against its upstream (as of the last fetch; nothing
-  contacts a remote), its uncommitted files with a status mark and line
-  counts, and its five latest commits. Checkouts with uncommitted work come
-  first, then unpushed, then behind, then clean. Clicking a checkout opens
-  its workspace. It reads every 10 seconds while shown and every minute
-  otherwise, so the icon's count of checkouts with uncommitted work stays
-  current. Only this machine's own daemon is read, not SSH hosts. Turn it off
-  with `[sidebar] changes = false`.
+- **Changes** shows what every checkout on this machine holds in Git right
+  now, one card per repository with its worktrees together. It reads every
+  workspace's folder and every pane's working directory, then adds every
+  other worktree of those repositories, so a worktree an agent left behind
+  shows after its pane closed. Each checkout shows its branch with `↑`/`↓`
+  against its upstream, how many of its commits the remote's default branch
+  lacks ("2 not on origin/main", for a branch with no upstream of its own),
+  its uncommitted files with a status mark and line counts, and its five
+  latest commits. All counts are as of the last fetch; nothing contacts a
+  remote. Dirty checkouts come first, then unpushed, unmerged, and behind.
+  **Needs attention**, the default, folds clean checkouts away; **All** lists
+  them. Clicking a checkout opens the workspace open in it. It reads every 15
+  seconds while shown and every two minutes otherwise, so the icon's count of
+  checkouts with uncommitted work stays current. Only this machine is read,
+  not SSH hosts. `[changes]` adds checkouts to it whether or not anything is
+  open in them, and folders whose repositories, one level down, are all read:
+
+  ```toml
+  [changes]
+  repos = ["~/notes", "~/dotfiles"]
+  roots = ["~/code"]
+  ```
+
+  `[sidebar] changes = false` turns the section off.
 - **Pull requests** and **Issues** list every repository the connected hosts'
   workspaces hold (see [Orchestrator](#orchestrator)). Refresh spins while a
   sync runs. `[sidebar] pull_requests = false` or `issues = false` leaves
