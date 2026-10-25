@@ -64,6 +64,10 @@ pub(crate) enum Preference {
     SidebarActivityBar(bool),
     /// `[sidebar] automations`: whether the bar shows Automations.
     SidebarAutomations(bool),
+    /// `[sidebar] pull_requests`: whether the bar shows Pull requests.
+    SidebarPullRequests(bool),
+    /// `[sidebar] issues`: whether the bar shows Issues.
+    SidebarIssues(bool),
     /// `[sidebar] device_footer`: when the sidebar draws its device footer.
     SidebarDeviceFooter(DeviceFooter),
     /// `[sidebar] change_counts`: whose line counts a worktree row shows.
@@ -233,6 +237,10 @@ impl Config {
                 Preference::SidebarAutomations(value) => {
                     (Some("sidebar"), "automations", Some(value.into()))
                 }
+                Preference::SidebarPullRequests(value) => {
+                    (Some("sidebar"), "pull_requests", Some(value.into()))
+                }
+                Preference::SidebarIssues(value) => (Some("sidebar"), "issues", Some(value.into())),
                 Preference::SidebarDeviceFooter(footer) => (
                     Some("sidebar"),
                     "device_footer",

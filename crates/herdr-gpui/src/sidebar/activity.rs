@@ -9,7 +9,8 @@
 //! `herdr-automate` scripts and runs of every host (`crate::automations`),
 //! and Usage the plan limits of every host (`crate::usage::section`).
 //! `[sidebar] activity_bar = false` turns the bar off, and `[sidebar]
-//! automations = false` leaves Automations off it. With the bar on, the
+//! pull_requests`, `issues`, or `automations = false` leaves that section
+//! off it. With the bar on, the
 //! sidebar toggle sits at the end of the Workspaces title, and collapsing the
 //! sidebar keeps the bar, with the compact rail and the toggle beside it.
 
@@ -200,9 +201,23 @@ impl HerdrWindow {
     /// Whether the bar lists `panel`. A section turned off in the settings
     /// is not listed, and a window left on it shows Workspaces.
     pub(crate) fn activity_panel_listed(&self, panel: ActivityPanel) -> bool {
+        let style = &self.config.sidebar_style;
         match panel {
-            ActivityPanel::Automations => self.config.sidebar_style.automations,
+            ActivityPanel::Automations => style.automations,
+            ActivityPanel::Issues => style.issues,
+            ActivityPanel::PullRequests => style.pull_requests,
             _ => true,
+        }
+    }
+
+    /// The `[sidebar]` key that turns `panel` off, for sections that have
+    /// one.
+    pub(crate) fn activity_panel_key(panel: ActivityPanel) -> Option<&'static str> {
+        match panel {
+            ActivityPanel::Automations => Some("automations"),
+            ActivityPanel::Issues => Some("issues"),
+            ActivityPanel::PullRequests => Some("pull_requests"),
+            _ => None,
         }
     }
 

@@ -6,6 +6,14 @@ bar's Pull requests and Issues sections, and dispatches new ones through the
 Herdr CLI. User-facing behavior is in the crate README's "Orchestrator"
 section; this page is for working on it.
 
+Either section can be turned off in Settings, Sidebar, Show pull requests and
+Show issues (`[sidebar] pull_requests = false`, `issues = false`). The bar
+then leaves it off, a window left on it shows Workspaces, and `herdr-gpui ui
+panel` refuses it, naming the key. Pull request badges and line counts on
+workspace rows stay, as they come from the GitHub prefetch, not the section.
+With both off at startup, the sections' view is never made, so nothing syncs
+for them.
+
 ## State and restart
 
 The orchestrator keeps its own per-repository SQLite database, in the app's

@@ -180,6 +180,40 @@ impl SettingsWindow {
                     ),
             )
             .child(
+                ui::row(theme, "sidebar-pull-requests", "Show pull requests")
+                    .description("The activity bar's Pull requests section.")
+                    .switch(
+                        ui::toggle(
+                            theme,
+                            "sidebar-pull-requests-toggle",
+                            self.config.sidebar_style.pull_requests,
+                            ready,
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            let mut intent = SidebarIntent::of(&this.config);
+                            intent.style.pull_requests = !intent.style.pull_requests;
+                            this.commit_sidebar(intent, cx);
+                        })),
+                    ),
+            )
+            .child(
+                ui::row(theme, "sidebar-issues", "Show issues")
+                    .description("The activity bar's Issues section.")
+                    .switch(
+                        ui::toggle(
+                            theme,
+                            "sidebar-issues-toggle",
+                            self.config.sidebar_style.issues,
+                            ready,
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            let mut intent = SidebarIntent::of(&this.config);
+                            intent.style.issues = !intent.style.issues;
+                            this.commit_sidebar(intent, cx);
+                        })),
+                    ),
+            )
+            .child(
                 ui::row(theme, "sidebar-automations", "Show automations")
                     .description(
                         "The activity bar's Automations section. Off, Herdr UI neither reads \

@@ -51,7 +51,11 @@ impl HerdrWindow {
             .activity
             .section_view
             .is_some_and(|id| self.orchestrators.contains_key(&id));
-        if made || !self.activity_bar_shown() || self.repo_specs().is_empty() {
+        // With both sections turned off nothing would show what it syncs.
+        let listed = [ActivityPanel::PullRequests, ActivityPanel::Issues]
+            .into_iter()
+            .any(|panel| self.activity_panel_listed(panel));
+        if made || !self.activity_bar_shown() || !listed || self.repo_specs().is_empty() {
             return;
         }
         // The tick hands it the repositories and accounts right after.
@@ -83,6 +87,13 @@ impl HerdrWindow {
                 crate::window::Flash::warning(
                     "Pull requests and issues show in the activity bar, which is turned off",
                 ),
+                cx,
+            );
+            return;
+        }
+        if !self.activity_panel_listed(ActivityPanel::Issues) {
+            self.show_flash(
+                crate::window::Flash::warning("Issues is turned off in Settings, Sidebar"),
                 cx,
             );
             return;

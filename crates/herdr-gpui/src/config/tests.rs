@@ -40,6 +40,7 @@ mod preferences;
 mod px0;
 mod remote;
 mod repository_icons;
+mod review_sections;
 mod sidebar_scope;
 mod sidebar_search;
 mod sidebar_settings;

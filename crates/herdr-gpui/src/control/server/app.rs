@@ -293,7 +293,7 @@ pub(super) fn ui(call: Call<UiOp>, cx: &mut App) -> Response {
                     format!(
                         "{} is turned off: [sidebar] {} = false",
                         panel.name(),
-                        panel.name()
+                        HerdrWindow::activity_panel_key(panel).unwrap_or(panel.name())
                     ),
                 );
             }

@@ -13,6 +13,7 @@ mod layout;
 mod sections;
 mod startup_counts;
 mod toggle;
+mod turned_off;
 
 fn item(native_id: &str, title: &str) -> Item {
     Item {

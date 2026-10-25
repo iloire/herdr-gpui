@@ -375,6 +375,11 @@ size = 12
 # starts any host's automation daemon; daemons already running keep running.
 # automations = true
 
+# The bar's Pull requests and Issues sections. false leaves each off the bar;
+# pull request badges and counts on workspace rows stay.
+# pull_requests = true
+# issues = true
+
 # A colour per host, keyed by the host's name in the sidebar, as #rgb or
 # #rrggbb. It washes the host's header, its workspace rows, and its agents'
 # rows faintly, so a long list reads by colour. Names with spaces go in quotes.

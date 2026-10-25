@@ -13,6 +13,7 @@ mod features;
 mod focus_follows_mouse;
 mod indicators;
 mod repository_icons;
+mod review_sections;
 mod session_restore;
 mod sidebar_search;
 mod sound_volume;
