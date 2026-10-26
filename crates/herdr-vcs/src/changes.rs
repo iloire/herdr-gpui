@@ -8,6 +8,8 @@
 //! host; nothing here contacts a Git remote, so every count is against the
 //! last fetch.
 
+pub mod overview;
+
 use crate::host::Session;
 use std::{path::Path, time::Instant};
 
@@ -295,7 +297,7 @@ pub fn read(
 
 /// The remote's default branch as last fetched: what `origin/HEAD` names,
 /// else `origin/main` or `origin/master`, whichever exists.
-fn default_branch(
+pub(crate) fn default_branch(
     session: &mut Session,
     path: &str,
     deadline: Instant,

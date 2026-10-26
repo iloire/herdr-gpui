@@ -10,7 +10,7 @@ mod view;
 pub(crate) use herdr_orchestrator::*;
 pub(crate) use host::{LiveCache, Orchestrator, ViewId};
 pub(crate) use view::{
-    Event, List, LiveAgent, Look, OrchestratorView, RepoSpec, key_label, pane, without_html,
+    Event, List, LiveAgent, Look, OrchestratorView, RepoSpec, closed, key_label, pane, without_html,
 };
 
 #[cfg(test)]

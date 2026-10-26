@@ -1,10 +1,20 @@
-//! A folder's Home: its title with buttons to its terminals and files,
-//! then cards for what it holds. Uncommitted files and recent commits open
-//! its Changes; an agent opens its pane in its Terminals; a port opens in
-//! a browser tab.
+//! A folder's Home: its title, then cards for what it holds and where it
+//! stands, what may need the user first. Its uncommitted files and recent
+//! commits (`work`) open its Changes; its pull requests and issues
+//! (`github`) open their pages; its branches, worktrees, sync, and activity
+//! come from the repository overview (`repo`, read by `read`); an agent
+//! opens its pane in its Terminals; a port opens in a browser tab.
+
+mod github;
+mod read;
+mod repo;
+mod work;
+
+pub(crate) use read::Reads;
+
+use repo::{home_activity, home_branches, home_sync};
 
 use super::{
-    Part,
     model::{self, Card},
     view::folder_header,
 };
@@ -12,14 +22,11 @@ use crate::{
     HerdrWindow,
     config::{corners, mix},
     devices_overview::Look,
-    fonts::StyledFont,
     icons::AgentIcon,
 };
 use gpui::{prelude::*, *};
-use herdr_vcs::changes::{Checkout, Kind};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// Files and commits a card lists before it says how many more.
+/// Rows a card lists before it says how many more.
 const LISTED: usize = 8;
 
 impl HerdrWindow {
@@ -37,8 +44,14 @@ impl HerdrWindow {
                 .map(|shown| &shown.checkout)
                 .find(|checkout| checkout.path == *path)
         });
-        let terminals = card.clone();
-        let files = card.clone();
+        let overview = card
+            .checkout
+            .as_deref()
+            .and_then(|path| self.folders.overview.of(path));
+        let github = self.folder_github(card, cx);
+        let pair = |left: Stateful<Div>, right: Stateful<Div>| {
+            div().flex().gap_4().min_w_0().child(left).child(right)
+        };
         div()
             .id("folder-home")
             .debug_selector(|| "folder-home".into())
@@ -49,130 +62,27 @@ impl HerdrWindow {
             .flex()
             .flex_col()
             .gap_4()
-            .child(
-                folder_header(look, card)
-                    .child(
-                        button(look, "folder-open-terminals", "Terminals", true).on_click(
-                            cx.listener(move |this, _, window, cx| {
-                                this.select_folder(&terminals, Some(Part::Terminals), window, cx);
-                            }),
-                        ),
-                    )
-                    .child(button(look, "folder-open-files", "Files", false).on_click(
-                        cx.listener(move |this, _, window, cx| {
-                            this.select_folder(&files, Some(Part::Files), window, cx);
-                        }),
-                    )),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap_4()
-                    .min_w_0()
-                    .child(self.home_uncommitted(look, card, checkout, cx))
-                    .child(self.home_agents(look, card, cx)),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap_4()
-                    .min_w_0()
-                    .child(self.home_commits(look, card, checkout, cx))
-                    .child(self.home_ports(look, card, cx)),
-            )
-    }
-
-    fn home_uncommitted(
-        &self,
-        look: &Look,
-        card: &Card,
-        checkout: Option<&Checkout>,
-        cx: &mut Context<Self>,
-    ) -> Stateful<Div> {
-        let theme = look.theme;
-        let count = card.dirty.filter(|dirty| dirty.files > 0).map(|dirty| {
-            format!(
-                "{} {} · +{} −{}",
-                dirty.files,
-                if dirty.files == 1 { "file" } else { "files" },
-                dirty.added,
-                dirty.removed
-            )
-        });
-        let body: AnyElement = match checkout {
-            Some(checkout) if checkout.dirty() => div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .children(checkout.files.iter().take(LISTED).map(|file| {
-                    let (letter, color) = match file.kind {
-                        Kind::Untracked => ("?", theme.ink(theme.palette[2])),
-                        Kind::Added => ("A", theme.ink(theme.palette[2])),
-                        Kind::Deleted => ("D", theme.ink(theme.palette[1])),
-                        Kind::Conflicted => ("U", theme.ink(theme.palette[1])),
-                        Kind::Renamed => ("R", theme.ink(theme.palette[4])),
-                        Kind::Modified => ("M", theme.ink(theme.palette[3])),
-                    };
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .min_w_0()
-                        .text_font(look.mono)
-                        .text_size(px(look.mono.size - 1.))
-                        .child(
-                            div()
-                                .flex_none()
-                                .w(px(12.))
-                                .text_color(rgb(color))
-                                .child(letter),
-                        )
-                        .child(div().flex_1().min_w_0().truncate().child(file.path.clone()))
-                        .when_some(
-                            file.additions.zip(file.deletions),
-                            |row, (added, removed)| {
-                                row.child(
-                                    div()
-                                        .flex_none()
-                                        .flex()
-                                        .gap_1()
-                                        .child(
-                                            div()
-                                                .text_color(rgb(theme.ink(theme.palette[2])))
-                                                .child(format!("+{added}")),
-                                        )
-                                        .when(removed > 0, |lines| {
-                                            lines.child(
-                                                div()
-                                                    .text_color(rgb(theme.ink(theme.palette[1])))
-                                                    .child(format!("−{removed}")),
-                                            )
-                                        }),
-                                )
-                            },
-                        )
-                }))
-                .children(more(look, checkout.total_files))
-                .into_any_element(),
-            Some(_) => quiet(look, "Nothing uncommitted").into_any_element(),
-            None if card.host.is_some() => quiet(
-                look,
-                "Uncommitted files are read on this computer's checkouts only, so far.",
-            )
-            .into_any_element(),
-            None => quiet(look, "Not a Git checkout").into_any_element(),
-        };
-        let clicked = card.clone();
-        panel(look, "folder-home-uncommitted", "Uncommitted", count)
-            .when(checkout.is_some(), |panel| {
-                panel
-                    .cursor_pointer()
-                    .hover(|style| style.bg(rgb(mix(theme.surface, theme.foreground, 4))))
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.select_folder(&clicked, Some(Part::Changes), window, cx);
-                    }))
-            })
-            .child(body)
+            .child(folder_header(look, card))
+            .child(pair(
+                self.home_uncommitted(look, card, checkout, cx),
+                self.home_agents(look, card, cx),
+            ))
+            .child(pair(
+                self.home_pull_requests(look, card, github.as_ref(), cx),
+                self.home_issues(look, card, github.as_ref(), cx),
+            ))
+            .child(pair(
+                self.home_commits(look, card, checkout, cx),
+                home_branches(look, card, overview),
+            ))
+            .child(pair(
+                home_sync(look, card, checkout, overview, github.as_ref()),
+                self.home_worktrees(look, card, cx),
+            ))
+            .child(pair(
+                home_activity(look, card, overview),
+                self.home_ports(look, card, cx),
+            ))
     }
 
     fn home_agents(&self, look: &Look, card: &Card, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -222,81 +132,6 @@ impl HerdrWindow {
         panel(look, "folder-home-agents", "Agents", count).child(list)
     }
 
-    fn home_commits(
-        &self,
-        look: &Look,
-        card: &Card,
-        checkout: Option<&Checkout>,
-        cx: &mut Context<Self>,
-    ) -> Stateful<Div> {
-        let theme = look.theme;
-        let now = SystemTime::now();
-        let count = (card.ahead > 0).then(|| format!("↑{} to push", card.ahead));
-        let commits = checkout
-            .map(|checkout| checkout.commits.as_slice())
-            .unwrap_or_default();
-        let body: AnyElement = if commits.is_empty() {
-            quiet(
-                look,
-                if checkout.is_some() {
-                    "No commits yet"
-                } else {
-                    "Commits are read on this computer's checkouts only, so far."
-                },
-            )
-            .into_any_element()
-        } else {
-            div()
-                .flex()
-                .flex_col()
-                .gap_1()
-                .children(commits.iter().take(LISTED).map(|commit| {
-                    let at = UNIX_EPOCH + Duration::from_secs(commit.time.max(0).unsigned_abs());
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
-                        .min_w_0()
-                        .child(
-                            div()
-                                .flex_none()
-                                .text_font(look.mono)
-                                .text_size(px(look.mono.size - 1.))
-                                .text_color(rgb(theme.primary()))
-                                .child(commit.short().to_owned()),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .truncate()
-                                .child(commit.subject.clone()),
-                        )
-                        .child(
-                            div()
-                                .flex_none()
-                                .text_size(look.small())
-                                .text_color(rgb(theme.muted))
-                                .child(crate::changes::age(
-                                    now.duration_since(at).unwrap_or_default(),
-                                )),
-                        )
-                }))
-                .into_any_element()
-        };
-        let clicked = card.clone();
-        panel(look, "folder-home-commits", "Recent commits", count)
-            .when(!commits.is_empty(), |panel| {
-                panel
-                    .cursor_pointer()
-                    .hover(|style| style.bg(rgb(mix(theme.surface, theme.foreground, 4))))
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.select_folder(&clicked, Some(Part::Changes), window, cx);
-                    }))
-            })
-            .child(body)
-    }
-
     fn home_ports(&self, look: &Look, card: &Card, cx: &mut Context<Self>) -> Stateful<Div> {
         let body = match self.folder_ports(look, card, cx) {
             Some(ports) => ports.into_any_element(),
@@ -332,7 +167,7 @@ impl HerdrWindow {
 }
 
 /// A card of the Home: a small title and count over its body.
-fn panel(
+pub(super) fn panel(
     look: &Look,
     id: &'static str,
     title: &'static str,
@@ -367,37 +202,15 @@ fn panel(
         )
 }
 
-fn quiet(look: &Look, text: &'static str) -> Div {
-    div().text_color(rgb(look.theme.muted)).child(text)
+pub(super) fn quiet(look: &Look, text: impl Into<SharedString>) -> Div {
+    div().text_color(rgb(look.theme.muted)).child(text.into())
 }
 
-fn more(look: &Look, total: usize) -> Option<Div> {
+pub(super) fn more(look: &Look, total: usize) -> Option<Div> {
     (total > LISTED).then(|| {
         div()
             .text_size(look.small())
             .text_color(rgb(look.theme.muted))
             .child(format!("and {} more", total - LISTED))
     })
-}
-
-fn button(look: &Look, id: &'static str, label: &'static str, primary: bool) -> Stateful<Div> {
-    let theme = look.theme;
-    let fill = if primary {
-        theme.primary()
-    } else {
-        theme.active
-    };
-    div()
-        .id(id)
-        .debug_selector(move || id.into())
-        .flex_none()
-        .px_2p5()
-        .py_1()
-        .rounded(px(corners::CONTROL))
-        .cursor_pointer()
-        .bg(rgb(fill))
-        .text_color(rgb(theme.text_on(fill)))
-        .text_size(look.small())
-        .font_weight(FontWeight::SEMIBOLD)
-        .child(label)
 }

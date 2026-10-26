@@ -201,9 +201,19 @@ impl HerdrWindow {
     /// The key [`Self::repo_specs`] gives workspace `workspace` on the shown
     /// host, so a section can pick that project.
     pub(crate) fn workspace_repo_key(&self, workspace: &str) -> Option<String> {
-        let endpoint = self.endpoints.get(self.selected_endpoint)?;
-        let found = self
-            .live
+        self.folder_repo_key(self.selected_endpoint, workspace)
+    }
+
+    /// The key [`Self::repo_specs`] gives workspace `workspace` on endpoint
+    /// `index`, connected or not.
+    pub(crate) fn folder_repo_key(&self, index: usize, workspace: &str) -> Option<String> {
+        let endpoint = self.endpoints.get(index)?;
+        let live = if index == self.selected_endpoint {
+            &self.live
+        } else {
+            &endpoint.live
+        };
+        let found = live
             .snapshot
             .as_deref()?
             .workspaces

@@ -696,6 +696,7 @@ impl HerdrWindow {
         self.poll_devices_overview(cx);
         self.poll_overview(cx);
         self.poll_changes(cx);
+        self.poll_folder_overview(cx);
         self.poll_files(cx);
         self.poll_context_strip(cx);
         self.poll_security(cx);

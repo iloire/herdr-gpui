@@ -2280,6 +2280,23 @@ window at once, and `herdr-gpui ui panel NAME` shows a section.
   creates it, and Folders selects that folder on its Home. With no roots set
   the picker says so and shows how to add one.
 
+  A folder's **Home** puts where it stands on one page, in cards:
+  uncommitted files and the agents working in it; its open **pull
+  requests**, with their checks and review state ("your review" when you
+  are asked), and its open **issues**, each opening its page in the Pull
+  requests or Issues section; its recent commits, and its eight most
+  recently committed **branches**, each marked merged or with `↑`/`↓`
+  against the remote's default branch; **Sync**, which says what there is to
+  push or pull, the commits not yet on the default branch, when that branch
+  last moved here, whether CI passes on it, and the latest tag with the
+  commits since it; its other **worktrees**, each with its uncommitted,
+  unpushed, and unmerged work, opening its own folder when a workspace is
+  open there; and **Activity**, the commits of the last fourteen days and
+  the files they changed most. The branch, tag, and activity read runs only
+  while a Home is shown, every 30 seconds, on this computer's checkouts;
+  pull requests, issues, and CI come from the Pull requests and Issues
+  sections' sync, so they show while either section is turned on.
+
   A folder's **Changes** shows what its checkout holds in Git right now. The
   window reads every
   workspace's folder and every pane's working directory, then adds every

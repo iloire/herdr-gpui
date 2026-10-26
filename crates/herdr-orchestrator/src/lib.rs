@@ -41,7 +41,7 @@ pub use model::{
 pub use naming::LiveBranch;
 pub use prompt::nonce;
 pub use repo::github_repository;
-pub use review::{CheckState, PrStatus, Review};
+pub use review::{BranchChecks, CheckState, PrStatus, Review};
 #[cfg(any(test, feature = "test-support"))]
 pub use service::SourceStatus;
 pub use service::{Notice, Request, Service, Snapshot, SyncState, Timing};

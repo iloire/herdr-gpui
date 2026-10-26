@@ -1,15 +1,21 @@
 //! Where each open pull request stands on GitHub: its review decision, who
 //! is asked to review it, and its checks, read with one GraphQL query per
 //! page after each sync. The last answer is kept in the database beside the
-//! items, so a restart shows it until the first sync reads it again.
+//! items, so a restart shows it until the first sync reads it again. The
+//! first page also reads the checks on the default branch's tip, which a
+//! folder's Home shows; those are not kept.
 
 use super::{Error, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{collections::HashMap, time::Duration};
 
-const QUERY: &str = r#"query($owner: String!, $repo: String!, $after: String) {
+const QUERY: &str = r#"query($owner: String!, $repo: String!, $after: String, $first: Boolean!) {
   repository(owner: $owner, name: $repo) {
+    defaultBranchRef @include(if: $first) {
+      name
+      target { ... on Commit { statusCheckRollup { ...Contexts } } }
+    }
     pullRequests(first: 50, after: $after, states: OPEN, orderBy: {field: UPDATED_AT, direction: DESC}) {
       pageInfo { hasNextPage endCursor }
       nodes {
@@ -18,16 +24,17 @@ const QUERY: &str = r#"query($owner: String!, $repo: String!, $after: String) {
         reviewRequests(first: 20) {
           nodes { requestedReviewer { __typename ... on User { login } ... on Team { slug } } }
         }
-        commits(last: 1) {
-          nodes { commit { statusCheckRollup { contexts(first: 50) {
-            nodes {
-              __typename
-              ... on CheckRun { name status conclusion }
-              ... on StatusContext { context state }
-            }
-          } } } }
-        }
+        commits(last: 1) { nodes { commit { statusCheckRollup { ...Contexts } } } }
       }
+    }
+  }
+}
+fragment Contexts on StatusCheckRollup {
+  contexts(first: 50) {
+    nodes {
+      __typename
+      ... on CheckRun { name status conclusion }
+      ... on StatusContext { context state }
     }
   }
 }"#;
@@ -74,13 +81,18 @@ pub struct PrStatus {
     pub checks: Vec<Check>,
 }
 
+/// What `checks` add up to: any failure, else anything still running,
+/// else passed. None when nothing but skipped checks reported.
+fn rollup(checks: &[Check]) -> Option<CheckState> {
+    [CheckState::Failed, CheckState::Pending, CheckState::Passed]
+        .into_iter()
+        .find(|wanted| checks.iter().any(|check| check.state == *wanted))
+}
+
 impl PrStatus {
-    /// What the checks add up to: any failure, else anything still running,
-    /// else passed. None when nothing but skipped checks reported.
+    /// What its checks add up to, as [`rollup`] says.
     pub fn checks_state(&self) -> Option<CheckState> {
-        [CheckState::Failed, CheckState::Pending, CheckState::Passed]
-            .into_iter()
-            .find(|wanted| self.checks.iter().any(|check| check.state == *wanted))
+        rollup(&self.checks)
     }
 
     /// Whether `login` is asked to review it.
@@ -91,23 +103,51 @@ impl PrStatus {
     }
 }
 
-/// Every open pull request's status in `owner/repo`, by number.
+/// The checks on a default branch's tip.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct BranchChecks {
+    pub branch: String,
+    pub checks: Vec<Check>,
+}
+
+impl BranchChecks {
+    /// What its checks add up to, as [`rollup`] says.
+    pub fn checks_state(&self) -> Option<CheckState> {
+        rollup(&self.checks)
+    }
+}
+
+/// What one read of a repository found.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Statuses {
+    /// Every open pull request's status, by number.
+    pub pull_requests: HashMap<u64, PrStatus>,
+    /// `None` for an empty repository, which has no default branch yet.
+    pub default_branch: Option<BranchChecks>,
+}
+
+/// Every open pull request's status in `owner/repo`, and the default
+/// branch's checks.
 pub fn fetch(
     repository: &str,
     mut fetch: impl FnMut(&str, Value) -> Result<Value>,
-) -> Result<HashMap<u64, PrStatus>> {
+) -> Result<Statuses> {
     let (owner, repo) = repository
         .split_once('/')
         .ok_or_else(|| Error::RemoteUrl(repository.to_owned()))?;
-    let mut statuses = HashMap::new();
+    let mut statuses = Statuses::default();
     let mut after: Option<String> = None;
     for _ in 0..PAGES {
+        let first = after.is_none();
         let response = fetch(
             QUERY,
-            json!({ "owner": owner, "repo": repo, "after": after }),
+            json!({ "owner": owner, "repo": repo, "after": after, "first": first }),
         )?;
         let page = parse(response)?;
-        statuses.extend(page.statuses);
+        statuses.pull_requests.extend(page.statuses);
+        if first {
+            statuses.default_branch = page.default_branch;
+        }
         match page.next {
             Some(cursor) => after = Some(cursor),
             None => break,
@@ -123,15 +163,35 @@ pub fn timeout() -> Duration {
 
 pub struct Page {
     pub statuses: HashMap<u64, PrStatus>,
+    /// Read on the first page only.
+    pub default_branch: Option<BranchChecks>,
     /// The cursor of the next page, when there is one.
     pub next: Option<String>,
 }
 
 pub fn parse(response: Value) -> Result<Page> {
-    let value = response
+    let repository = response
         .get("data")
         .and_then(|data| data.get("repository"))
-        .and_then(|repository| repository.get("pullRequests"))
+        .ok_or(Error::Output {
+            operation: "Reading pull request checks",
+        })?;
+    // Checks on the default branch are a nicety: a shape not understood
+    // leaves them out rather than failing the pull requests.
+    let default_branch = repository
+        .get("defaultBranchRef")
+        .cloned()
+        .and_then(|value| serde_json::from_value::<DefaultBranch>(value).ok())
+        .map(|branch| BranchChecks {
+            branch: name(&branch.name),
+            checks: branch
+                .target
+                .and_then(|target| target.status_check_rollup)
+                .map(|rollup| checks(rollup.contexts.nodes))
+                .unwrap_or_default(),
+        });
+    let value = repository
+        .get("pullRequests")
         .cloned()
         .ok_or(Error::Output {
             operation: "Reading pull request checks",
@@ -151,7 +211,11 @@ pub fn parse(response: Value) -> Result<Page> {
         .has_next_page
         .then_some(connection.page_info.end_cursor)
         .flatten();
-    Ok(Page { statuses, next })
+    Ok(Page {
+        statuses,
+        default_branch,
+        next,
+    })
 }
 
 fn name(text: &str) -> String {
@@ -203,6 +267,12 @@ enum Reviewer {
     },
     #[serde(other)]
     Other,
+}
+
+#[derive(Deserialize)]
+struct DefaultBranch {
+    name: String,
+    target: Option<Commit>,
 }
 
 #[derive(Deserialize)]
@@ -258,38 +328,45 @@ impl Node {
             })
             .take(MAX_REVIEWERS)
             .collect();
-        let checks = self
-            .commits
-            .map(|commits| commits.nodes)
-            .unwrap_or_default()
-            .into_iter()
-            .flatten()
-            .filter_map(|node| node.commit.status_check_rollup)
-            .flat_map(|rollup| rollup.contexts.nodes)
-            .flatten()
-            .filter_map(|context| match context {
-                Entry::CheckRun {
-                    name: check,
-                    status,
-                    conclusion,
-                } => Some(Check {
-                    name: name(&check),
-                    state: check_run(status.as_deref(), conclusion.as_deref()),
-                }),
-                Entry::StatusContext { context, state } => Some(Check {
-                    name: name(&context),
-                    state: status_context(state.as_deref()),
-                }),
-                Entry::Other => None,
-            })
-            .take(MAX_CHECKS)
-            .collect();
+        let checks = checks(
+            self.commits
+                .map(|commits| commits.nodes)
+                .unwrap_or_default()
+                .into_iter()
+                .flatten()
+                .filter_map(|node| node.commit.status_check_rollup)
+                .flat_map(|rollup| rollup.contexts.nodes),
+        );
         PrStatus {
             review,
             requested,
             checks,
         }
     }
+}
+
+/// A rollup's contexts as checks, at most [`MAX_CHECKS`].
+fn checks(contexts: impl IntoIterator<Item = Option<Entry>>) -> Vec<Check> {
+    contexts
+        .into_iter()
+        .flatten()
+        .filter_map(|context| match context {
+            Entry::CheckRun {
+                name: check,
+                status,
+                conclusion,
+            } => Some(Check {
+                name: name(&check),
+                state: check_run(status.as_deref(), conclusion.as_deref()),
+            }),
+            Entry::StatusContext { context, state } => Some(Check {
+                name: name(&context),
+                state: status_context(state.as_deref()),
+            }),
+            Entry::Other => None,
+        })
+        .take(MAX_CHECKS)
+        .collect()
 }
 
 fn check_run(status: Option<&str>, conclusion: Option<&str>) -> CheckState {

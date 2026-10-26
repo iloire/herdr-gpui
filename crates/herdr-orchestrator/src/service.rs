@@ -174,6 +174,9 @@ pub struct Snapshot {
     /// Each open pull request's review and checks, by repository and number,
     /// as the last sync of its source read them. Never stored.
     pub pr_status: Arc<HashMap<(String, u64), super::PrStatus>>,
+    /// The checks on each GitHub repository's default branch, as the last
+    /// sync read them. Never stored, so none show until the first sync.
+    pub default_checks: Arc<HashMap<String, super::BranchChecks>>,
 }
 
 pub struct Service {
@@ -827,14 +830,21 @@ impl Worker {
                     Ok(statuses) => {
                         if writable
                             && let Err(error) =
-                                store.replace_pr_statuses(&key.repository, &statuses)
+                                store.replace_pr_statuses(&key.repository, &statuses.pull_requests)
                         {
                             tracing::warn!(%error, "Cannot keep pull request checks");
                         }
                         let mut all = (*self.snapshot.pr_status).clone();
                         all.retain(|(repository, _), _| *repository != key.repository);
+                        let mut branches = (*self.snapshot.default_checks).clone();
+                        match statuses.default_branch {
+                            Some(checks) => branches.insert(key.repository.clone(), checks),
+                            None => branches.remove(&key.repository),
+                        };
+                        self.snapshot.default_checks = Arc::new(branches);
                         all.extend(
                             statuses
+                                .pull_requests
                                 .into_iter()
                                 .map(|(number, status)| ((key.repository.clone(), number), status)),
                         );

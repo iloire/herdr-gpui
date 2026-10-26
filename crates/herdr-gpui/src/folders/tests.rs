@@ -2,6 +2,7 @@
 
 mod drag;
 mod edge_bar;
+mod home;
 mod naming;
 mod new_button;
 mod page;
@@ -67,7 +68,7 @@ fn row(endpoint: &str, workspace: &str, state: State, title: &str, since: u64) -
 }
 
 /// A read checkout at `path` open in `workspaces`, with `files` changed.
-fn shown(path: &str, workspaces: &[&str], files: usize, ahead: u32) -> Shown {
+pub(super) fn shown(path: &str, workspaces: &[&str], files: usize, ahead: u32) -> Shown {
     let changed = (0..files)
         .map(|file| FileChange {
             path: format!("f{file}.rs"),
@@ -96,7 +97,7 @@ fn shown(path: &str, workspaces: &[&str], files: usize, ahead: u32) -> Shown {
     }
 }
 
-fn repo(checkouts: Vec<Shown>) -> Repo {
+pub(super) fn repo(checkouts: Vec<Shown>) -> Repo {
     Repo {
         name: "repo".into(),
         checkouts,

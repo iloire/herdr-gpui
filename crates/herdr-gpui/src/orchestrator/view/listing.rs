@@ -85,6 +85,21 @@ impl OrchestratorView {
         cx.notify();
     }
 
+    /// Repository `key`'s last snapshot and the GitHub login it is read
+    /// as, for a folder's Home.
+    pub(crate) fn home_repo(&self, key: &str) -> Option<(&Snapshot, Option<&str>)> {
+        self.repos
+            .iter()
+            .find(|repo| repo.key == key)
+            .map(|repo| (&repo.snapshot, repo.login.as_deref()))
+    }
+
+    /// Opens item `key`'s page, as a click on its row does.
+    pub(crate) fn open_item(&mut self, key: String, cx: &mut Context<Self>) {
+        self.selected = Some(key.clone());
+        self.open_detail(key, cx);
+    }
+
     /// The item a row shows.
     pub(super) fn row_item(&self, row: &ItemRow) -> &Item {
         &self.repos[row.repo].snapshot.items[row.item]

@@ -31,7 +31,7 @@ pub(crate) use look::Look;
 pub(crate) use markdown::without_html;
 use pane::{PANE_DEFAULT, PaneDrag, Resize};
 pub(crate) use repo::RepoSpec;
-pub(crate) use rows::{LiveAgent, Tab as List, key_label};
+pub(crate) use rows::{LiveAgent, Tab as List, closed, key_label};
 
 use super::{Notice, Provider, Request, Service, Snapshot, SyncState};
 use crate::search_input::{self, SearchInput};

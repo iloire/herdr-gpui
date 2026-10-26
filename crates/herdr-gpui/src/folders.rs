@@ -6,6 +6,9 @@
 //! files and commits with the review beside them; Terminals, its
 //! workspace's terminals and tabs; or Files, its file tree beside them.
 //!
+//! Home also reads the selected folder's repository overview (its
+//! branches, latest tag, and activity) on its own schedule (`home::read`).
+//!
 //! Home and Changes are pages across the window's body. Terminals and Files
 //! need the window's own terminal area, so with either picked the list
 //! becomes a column beside it, as the Workspaces sidebar is (`column`),
@@ -70,6 +73,8 @@ pub(crate) struct Page {
     pub(crate) list_width: PanelWidth,
     list_scroll: ScrollHandle,
     body_scroll: ScrollHandle,
+    /// The selected folder's repository overview, for its Home.
+    overview: home::Reads,
 }
 
 impl Default for Page {
@@ -83,6 +88,7 @@ impl Default for Page {
             list_width: crate::panel_resize::FOLDERS_LIST,
             list_scroll: ScrollHandle::new(),
             body_scroll: ScrollHandle::new(),
+            overview: home::Reads::default(),
         }
     }
 }

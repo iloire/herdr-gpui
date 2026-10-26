@@ -227,7 +227,7 @@ impl HerdrWindow {
         self.activity_bar_shown()
     }
 
-    fn folders_on_screen(&self) -> bool {
+    pub(crate) fn folders_on_screen(&self) -> bool {
         self.activity_section() == Some(ActivityPanel::Folders) || self.folders_column()
     }
 

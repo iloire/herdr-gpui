@@ -112,7 +112,7 @@ fn log_records_keep_subjects_with_separators_and_stop_at_the_limit() {
     assert!(parse_log("").is_empty());
 }
 
-fn deadline() -> Instant {
+pub(crate) fn deadline() -> Instant {
     Instant::now() + Duration::from_secs(15)
 }
 
@@ -122,13 +122,13 @@ fn read_at(path: &Path) -> crate::Result<Checkout> {
     read(session, located, deadline(), &|| false)
 }
 
-struct Repo {
+pub(crate) struct Repo {
     directory: tempfile::TempDir,
     hooks: tempfile::TempDir,
 }
 
 impl Repo {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let repo = Self {
             directory: tempfile::tempdir().unwrap(),
             hooks: tempfile::tempdir().unwrap(),
@@ -137,12 +137,12 @@ impl Repo {
         repo
     }
 
-    fn path(&self) -> &Path {
+    pub(crate) fn path(&self) -> &Path {
         self.directory.path()
     }
 
     /// Runs Git in the repository; its output, trimmed.
-    fn git(&self, args: &[&str]) -> String {
+    pub(crate) fn git(&self, args: &[&str]) -> String {
         let result = Command::new("git")
             .arg("-C")
             .arg(self.path())
@@ -167,7 +167,7 @@ impl Repo {
         String::from_utf8_lossy(&result.stdout).trim().to_owned()
     }
 
-    fn write(&self, name: &str, text: &str) {
+    pub(crate) fn write(&self, name: &str, text: &str) {
         std::fs::write(self.path().join(name), text).unwrap();
     }
 

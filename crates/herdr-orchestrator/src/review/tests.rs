@@ -73,7 +73,7 @@ fn reading_stops_at_the_last_page_or_the_page_limit() {
     })
     .unwrap();
     assert_eq!(calls, PAGES);
-    assert_eq!(statuses.len(), 2);
+    assert_eq!(statuses.pull_requests.len(), 2);
     let mut calls = 0;
     fetch("penso/herdr-gpui", |_, _| {
         calls += 1;
@@ -85,4 +85,45 @@ fn reading_stops_at_the_last_page_or_the_page_limit() {
         fetch("not-a-repository", |_, _| Ok(response(None))),
         Err(Error::RemoteUrl(_))
     ));
+}
+
+#[test]
+fn the_first_page_reads_the_default_branch_checks_and_later_ones_skip_them() {
+    let mut calls = 0;
+    let statuses = fetch("penso/herdr-gpui", |_, variables| {
+        calls += 1;
+        assert_eq!(variables["first"], calls == 1);
+        let mut page = response((calls == 1).then_some("cursor"));
+        if calls == 1 {
+            page["data"]["repository"]["defaultBranchRef"] = json!({
+                "name": "main",
+                "target": { "statusCheckRollup": { "contexts": { "nodes": [
+                    { "__typename": "CheckRun", "name": "build", "status": "COMPLETED", "conclusion": "SUCCESS" },
+                    { "__typename": "CheckRun", "name": "test", "status": "COMPLETED", "conclusion": "FAILURE" }
+                ] } } }
+            });
+        }
+        Ok(page)
+    })
+    .unwrap();
+    assert_eq!(calls, 2);
+    let main = statuses.default_branch.unwrap();
+    assert_eq!(main.branch, "main");
+    assert_eq!(main.checks.len(), 2);
+    assert_eq!(main.checks_state(), Some(CheckState::Failed));
+}
+
+#[test]
+fn a_default_branch_without_checks_or_a_shape_not_understood_says_nothing_wrong() {
+    let mut page = response(None);
+    page["data"]["repository"]["defaultBranchRef"] =
+        json!({ "name": "main", "target": { "statusCheckRollup": null } });
+    let main = parse(page).unwrap().default_branch.unwrap();
+    assert!(main.checks.is_empty());
+    assert_eq!(main.checks_state(), None);
+    let mut page = response(None);
+    page["data"]["repository"]["defaultBranchRef"] = json!({ "name": 5 });
+    let page = parse(page).unwrap();
+    assert_eq!(page.default_branch, None);
+    assert_eq!(page.statuses.len(), 2);
 }
