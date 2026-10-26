@@ -1,23 +1,22 @@
-//! The Folders page as drawn: a summary line with the Needs me and All
-//! filters, then the cards, wrapping to the window's width. With nothing
-//! open, the page says what it is for.
+//! The Folders page as drawn: the folder list on the left (`list`), and the
+//! selected folder's part across the rest, its Home (`home`) or its
+//! Changes. The marks, branch lines, and badges both sides share are here.
 
-use super::model::{self, Card, Summary};
+use super::{
+    Part,
+    model::{self, Card},
+};
 use crate::{
     HerdrWindow,
     config::{corners, mix},
     devices_overview::Look,
     fonts::StyledFont,
-    icons::AgentIcon,
 };
 use gpui::{prelude::*, *};
+use herdr_client::protocol::AgentStatus;
 
-/// The least a card takes before the row wraps.
-const CARD_MIN: f32 = 300.;
-/// Room around and between the cards.
-const PAD: f32 = 16.;
-const GAP: f32 = 12.;
-const MARK: f32 = 30.;
+/// The Changes part's list of files and commits, beside the review.
+const CHANGES_LIST: f32 = 380.;
 
 impl HerdrWindow {
     /// The page across the window's body.
@@ -25,40 +24,25 @@ impl HerdrWindow {
         let look = self.overview_look(cx);
         let theme = look.theme;
         let cards = self.folder_cards(cx);
-        let summary = Summary::of(&cards);
-        let shown: Vec<&Card> = cards
-            .iter()
-            .filter(|card| self.folders.all || card.needs_me())
-            .collect();
-        let body = if cards.is_empty() {
-            empty(&look).into_any_element()
-        } else if shown.is_empty() {
-            div()
+        let listed = self.listed_folders(&cards);
+        let selected = self.selected_folder(&listed);
+        let body = match selected {
+            None if cards.is_empty() => empty(&look).into_any_element(),
+            None => div()
                 .debug_selector(|| "folders-settled".into())
                 .p_5()
                 .text_color(rgb(theme.muted))
                 .child("Nothing needs you in any folder.")
-                .into_any_element()
-        } else {
-            let width = self.folder_card_width();
-            div()
-                .debug_selector(|| "folders-cards".into())
-                .p(px(PAD))
-                .flex()
-                .flex_wrap()
-                .gap(px(GAP))
-                .children(
-                    shown
-                        .into_iter()
-                        .map(|card| self.render_folder_card(&look, card, width, cx)),
-                )
-                .into_any_element()
+                .into_any_element(),
+            Some(card) => match self.folders.part {
+                Part::Home => self.render_folder_home(&look, card, cx).into_any_element(),
+                Part::Changes => self.render_folder_changes(&look, card, cx),
+            },
         };
         div()
             .id("folders")
             .debug_selector(|| "folders".into())
             .flex()
-            .flex_col()
             .flex_1()
             .size_full()
             .min_w_0()
@@ -67,166 +51,102 @@ impl HerdrWindow {
             .text_color(rgb(theme.foreground))
             .text_font(look.ui)
             .text_size(px(look.ui.size))
-            .child(self.folders_summary(&look, summary, cards.len(), cx))
+            .child(self.render_folder_list(&look, &cards, &listed, selected, cx))
             .child(
                 div()
-                    .id("folders-list")
+                    .flex()
+                    .flex_col()
                     .flex_1()
+                    .min_w_0()
                     .min_h_0()
-                    .overflow_y_scroll()
-                    .track_scroll(&self.folders.scroll)
                     .child(body),
             )
             .into_any_element()
     }
 
-    fn folders_summary(
-        &self,
-        look: &Look,
-        summary: Summary,
-        total: usize,
-        cx: &mut Context<Self>,
-    ) -> Div {
-        let theme = look.theme;
-        let mut parts = Vec::new();
-        if summary.waiting > 0 {
-            parts.push(format!("{} waiting for you", summary.waiting));
-        }
-        if summary.dirty > 0 {
-            parts.push(format!("{} uncommitted", summary.dirty));
-        }
-        if summary.unpushed > 0 {
-            parts.push(format!("{} to push", summary.unpushed));
-        }
-        if summary.hosts > 1 {
-            parts.push(format!("{} hosts", summary.hosts));
-        }
-        let filter = |id: &'static str, label: &'static str, all: bool, cx: &mut Context<Self>| {
-            let on = self.folders.all == all;
-            div()
-                .id(id)
-                .debug_selector(move || id.into())
-                .px_2p5()
-                .py_1()
-                .rounded(px(corners::CONTROL))
-                .cursor_pointer()
-                .when(on, |pill| {
-                    pill.bg(rgb(theme.active)).font_weight(FontWeight::SEMIBOLD)
-                })
-                .when(!on, |pill| {
-                    pill.text_color(rgb(theme.subtext()))
-                        .hover(|style| style.bg(rgb(theme.surface)))
-                })
-                .on_click(cx.listener(move |this, _, _, cx| this.show_all_folders(all, cx)))
-                .child(label)
-        };
-        div()
-            .debug_selector(|| "folders-summary".into())
-            .flex_none()
-            .px_5()
-            .py_3()
-            .flex()
-            .items_center()
-            .gap_3()
-            .border_b_1()
-            .border_color(rgb(theme.active))
-            .child(
-                div()
-                    .text_size(px(look.ui.size + 3.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child("Folders"),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .truncate()
-                    .text_color(rgb(theme.subtext()))
-                    .child(if parts.is_empty() {
-                        format!("{total} open, all quiet")
-                    } else {
-                        parts.join(" · ")
-                    }),
-            )
-            .child(filter("folders-needs-me", "Needs me", false, cx))
-            .child(filter("folders-all", "All", true, cx))
-    }
-
-    /// Every card's width: as many columns of at least [`CARD_MIN`] as the
-    /// page holds, sharing its width, so a short last row keeps the size of
-    /// the rows above it.
-    fn folder_card_width(&self) -> f32 {
-        let bar = self.sidebar_column_width(self.viewport_width).unwrap_or(0.);
-        // One pixel spare, so rounding never wraps a full row.
-        let room = (self.viewport_width - bar - 2. * PAD - 1.).max(CARD_MIN);
-        let columns = ((room + GAP) / (CARD_MIN + GAP)).floor().max(1.);
-        ((room - GAP * (columns - 1.)) / columns).floor()
-    }
-
-    fn render_folder_card(
+    /// The selected folder's checkout with the review beside it, as the
+    /// Changes section draws them, for that checkout alone.
+    fn render_folder_changes(
         &self,
         look: &Look,
         card: &Card,
-        width: f32,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let theme = look.theme;
-        let selector = format!("folder-{}-{}", card.endpoint, card.workspace);
-        let needs = card.rank() == model::Rank::NeedsYou;
-        let border = if needs {
-            look.status(herdr_client::protocol::AgentStatus::Blocked)
-        } else {
-            mix(theme.surface, theme.foreground, 8)
+        let shown = card.checkout.as_ref().and_then(|path| {
+            self.changes
+                .repos()
+                .iter()
+                .flat_map(|repo| &repo.checkouts)
+                .find(|shown| shown.checkout.path == *path)
+        });
+        let list = match shown {
+            Some(shown) => div()
+                .rounded(px(corners::PANEL))
+                .bg(rgb(theme.surface))
+                .child(self.changes_checkout(0, 0, shown, cx))
+                .into_any_element(),
+            None => div()
+                .text_color(rgb(theme.muted))
+                .child(if card.host.is_some() {
+                    "Uncommitted files are read on this computer's checkouts only, so far."
+                } else {
+                    "This folder is not in a Git checkout."
+                })
+                .into_any_element(),
         };
-        let (index, workspace) = (card.endpoint_index, card.workspace.clone());
-        let ports = self
-            .endpoints
-            .get(card.endpoint_index)
-            .and_then(|endpoint| crate::listening_ports::Daemon::of(&endpoint.connection.target))
-            .filter(|_| self.config.show_listening_ports)
-            .and_then(|daemon| self.listening_ports.get(&daemon, &card.workspace))
-            .map(|listed| {
-                crate::listening_ports::chips(
-                    listed,
-                    (&card.endpoint, &card.workspace),
-                    &self.tunnels,
-                    theme,
-                    look.ui.size - 1.,
-                    cx,
-                )
-            });
         div()
-            .id(SharedString::from(selector.clone()))
-            .debug_selector(move || selector.clone())
+            .debug_selector(|| "folder-changes".into())
             .flex()
             .flex_col()
-            .gap_2()
-            .flex_none()
-            .w(px(width))
-            .p_3()
-            .rounded(px(corners::PANEL))
-            .bg(rgb(theme.surface))
-            .border_1()
-            .border_color(rgb(border))
-            .cursor_pointer()
-            .hover(|style| style.bg(rgb(mix(theme.surface, theme.foreground, 4))))
-            .on_click(cx.listener(move |this, _, window, cx| {
-                this.open_folder(index, &workspace, window, cx);
-            }))
-            .child(title(look, card))
-            .child(git_line(look, card, ports))
-            .child(agent_line(look, card))
+            .size_full()
+            .min_h_0()
+            .child(
+                folder_header(look, card)
+                    .flex_none()
+                    .px_5()
+                    .py_3()
+                    .border_b_1()
+                    .border_color(rgb(theme.active)),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_1()
+                    .min_h_0()
+                    .child(
+                        div()
+                            .id("folder-changes-list")
+                            .w(px(CHANGES_LIST))
+                            .flex_none()
+                            .overflow_y_scroll()
+                            .p_3()
+                            .child(list),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .min_h_0()
+                            .flex()
+                            .border_l_1()
+                            .border_color(rgb(theme.active))
+                            .when(shown.is_some(), |pane| {
+                                pane.child(self.render_changes_review(cx))
+                            }),
+                    ),
+            )
             .into_any_element()
     }
 }
 
-/// The folder's mark: its monogram on a wash of its own hue.
-fn mark(look: &Look, name: &str) -> Div {
+/// A folder's mark: its monogram on a wash of its own hue.
+pub(super) fn mark(look: &Look, name: &str, side: f32) -> Div {
     let theme = look.theme;
     let color = theme.ink(theme.palette[model::hue(name)]);
     div()
         .flex_none()
-        .size(px(MARK))
+        .size(px(side))
         .rounded(px(corners::CONTROL))
         .bg(rgb(mix(theme.background, color, 22)))
         .border_1()
@@ -235,41 +155,111 @@ fn mark(look: &Look, name: &str) -> Div {
         .items_center()
         .justify_center()
         .text_color(rgb(color))
-        .text_size(px(MARK * 0.36))
+        .text_size(px(side * 0.38))
         .font_weight(FontWeight::BOLD)
         .child(model::monogram(name))
 }
 
-/// Mark, name, branch with ahead and behind, and the host when remote.
-fn title(look: &Look, card: &Card) -> Div {
+/// The branch in the terminal face, then ahead and behind when nonzero.
+pub(super) fn branch_line(look: &Look, card: &Card) -> Div {
     let theme = look.theme;
-    let sync = div()
-        .flex()
-        .flex_none()
-        .gap_1()
-        .text_size(look.small())
-        .when(card.ahead > 0, |sync| {
-            sync.child(
-                div()
-                    .text_color(rgb(
-                        look.status(herdr_client::protocol::AgentStatus::Working)
-                    ))
-                    .child(format!("↑{}", card.ahead)),
-            )
-        })
-        .when(card.behind > 0, |sync| {
-            sync.child(
-                div()
-                    .text_color(rgb(theme.subtext()))
-                    .child(format!("↓{}", card.behind)),
-            )
-        });
     div()
         .flex()
         .items_center()
-        .gap_2()
+        .gap_1p5()
         .min_w_0()
-        .child(mark(look, &card.name))
+        .text_size(look.small())
+        .when_some(card.branch.clone(), |line, branch| {
+            line.child(
+                svg()
+                    .flex_none()
+                    .size(px(11.))
+                    .path("icons/git-branch.svg")
+                    .text_color(rgb(theme.muted)),
+            )
+            .child(
+                div()
+                    .min_w_0()
+                    .truncate()
+                    .text_font(look.mono)
+                    .text_size(px(look.mono.size - 1.))
+                    .text_color(rgb(theme.subtext()))
+                    .child(branch),
+            )
+        })
+        .when(card.ahead > 0, |line| {
+            line.child(
+                div()
+                    .flex_none()
+                    .text_color(rgb(look.status(AgentStatus::Working)))
+                    .child(format!("↑{}", card.ahead)),
+            )
+        })
+        .when(card.behind > 0, |line| {
+            line.child(
+                div()
+                    .flex_none()
+                    .text_color(rgb(theme.subtext()))
+                    .child(format!("↓{}", card.behind)),
+            )
+        })
+}
+
+/// A count on a solid fill, as the bar's bubbles draw one.
+pub(super) fn bubble(look: &Look, fill: u32, count: usize) -> Div {
+    let theme = look.theme;
+    div()
+        .flex_none()
+        .px(px(5.))
+        .min_w(px(16.))
+        .h(px(16.))
+        .rounded_full()
+        .bg(rgb(fill))
+        .text_color(rgb(theme.text_on(fill)))
+        .text_size(px(10.))
+        .font_weight(FontWeight::BOLD)
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(count.to_string())
+}
+
+/// The host a folder is on, when it is not this computer.
+pub(super) fn host_chip(look: &Look, host: String) -> Div {
+    let theme = look.theme;
+    div()
+        .flex_none()
+        .flex()
+        .items_center()
+        .gap_1()
+        .px_1p5()
+        .rounded(px(corners::SMALL))
+        .bg(rgb(theme.active))
+        .text_size(look.small())
+        .text_color(rgb(theme.subtext()))
+        .child(
+            svg()
+                .size(px(11.))
+                .path("icons/computer.svg")
+                .text_color(rgb(theme.muted)),
+        )
+        .child(host)
+}
+
+/// The selected folder's title: mark, name, branch, and where it is.
+pub(super) fn folder_header(look: &Look, card: &Card) -> Div {
+    let theme = look.theme;
+    let folder = if card.host.is_some() {
+        card.folder.clone()
+    } else {
+        crate::folder::home_relative(&card.folder)
+    };
+    div()
+        .flex()
+        .items_center()
+        .gap_3()
+        .min_w_0()
+        .child(mark(look, &card.name, 34.))
         .child(
             div()
                 .flex()
@@ -279,6 +269,7 @@ fn title(look: &Look, card: &Card) -> Div {
                 .child(
                     div()
                         .truncate()
+                        .text_size(px(look.ui.size + 3.))
                         .font_weight(FontWeight::BOLD)
                         .child(card.name.clone()),
                 )
@@ -288,146 +279,19 @@ fn title(look: &Look, card: &Card) -> Div {
                         .items_center()
                         .gap_2()
                         .min_w_0()
-                        .when_some(card.branch.clone(), |line, branch| {
-                            line.child(
-                                svg()
-                                    .flex_none()
-                                    .size(px(12.))
-                                    .path("icons/git-branch.svg")
-                                    .text_color(rgb(theme.muted)),
-                            )
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .truncate()
-                                    .text_font(look.mono)
-                                    .text_size(px(look.mono.size - 1.))
-                                    .text_color(rgb(theme.subtext()))
-                                    .child(branch),
-                            )
-                        })
-                        .child(sync),
+                        .child(branch_line(look, card))
+                        .child(
+                            div()
+                                .min_w_0()
+                                .truncate()
+                                .text_size(look.small())
+                                .text_color(rgb(theme.muted))
+                                .child(folder),
+                        ),
                 ),
         )
-        .when_some(card.host.clone(), |title, host| {
-            title.child(
-                div()
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .gap_1()
-                    .px_1p5()
-                    .rounded(px(corners::SMALL))
-                    .bg(rgb(theme.active))
-                    .text_size(look.small())
-                    .text_color(rgb(theme.subtext()))
-                    .child(
-                        svg()
-                            .size(px(11.))
-                            .path("icons/computer.svg")
-                            .text_color(rgb(theme.muted)),
-                    )
-                    .child(host),
-            )
-        })
-}
-
-/// Uncommitted files and their lines, or clean, then the ports.
-fn git_line(look: &Look, card: &Card, ports: Option<Div>) -> Div {
-    let theme = look.theme;
-    let line = div()
-        .flex()
-        .items_center()
-        .gap_2()
-        .min_h(px(18.))
-        .text_size(look.small());
-    let line = match card.dirty {
-        Some(dirty) if dirty.files > 0 => {
-            let warn = look.status(herdr_client::protocol::AgentStatus::Blocked);
-            line.child(
-                div()
-                    .flex_none()
-                    .px(px(5.))
-                    .min_w(px(16.))
-                    .h(px(16.))
-                    .rounded_full()
-                    .bg(rgb(warn))
-                    .text_color(rgb(theme.text_on(warn)))
-                    .text_size(px(10.))
-                    .font_weight(FontWeight::BOLD)
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(dirty.files.to_string()),
-            )
-            .child(div().text_color(rgb(theme.subtext())).child("uncommitted"))
-            .child(
-                div()
-                    .flex()
-                    .gap_1()
-                    .text_font(look.mono)
-                    .child(
-                        div()
-                            .text_color(rgb(theme.ink(theme.palette[2])))
-                            .child(format!("+{}", dirty.added)),
-                    )
-                    .child(
-                        div()
-                            .text_color(rgb(theme.ink(theme.palette[1])))
-                            .child(format!("−{}", dirty.removed)),
-                    ),
-            )
-        }
-        Some(_) => line.child(div().text_color(rgb(theme.muted)).child("clean")),
-        None => line,
-    };
-    line.child(div().flex_1()).children(ports)
-}
-
-/// The most pressing agent, or a quiet line saying there is none.
-fn agent_line(look: &Look, card: &Card) -> Div {
-    let theme = look.theme;
-    let Some(agent) = &card.agent else {
-        return div()
-            .p_2()
-            .rounded(px(corners::CONTROL))
-            .border_1()
-            .border_dashed()
-            .border_color(rgb(theme.active))
-            .text_color(rgb(theme.muted))
-            .child("No agent running");
-    };
-    let color = look.status(agent.state.status());
-    let more = agent.count - 1;
-    div()
-        .flex()
-        .items_center()
-        .gap_2()
-        .min_w_0()
-        .p_2()
-        .rounded(px(corners::CONTROL))
-        .bg(rgb(mix(theme.surface, color, 12)))
-        .child(crate::icons::icon(
-            AgentIcon::from_identity(agent.identity.as_deref()).path(),
-            14.,
-            theme.foreground,
-        ))
-        .child(look.dot(agent.state.status()))
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .truncate()
-                .child(agent.title.clone()),
-        )
-        .when(more > 0, |line| {
-            line.child(
-                div()
-                    .flex_none()
-                    .text_size(look.small())
-                    .text_color(rgb(theme.muted))
-                    .child(format!("+{more}")),
-            )
+        .when_some(card.host.clone(), |header, host| {
+            header.child(host_chip(look, host))
         })
 }
 
@@ -461,9 +325,9 @@ fn empty(look: &Look) -> Div {
                 .text_center()
                 .text_color(rgb(theme.muted))
                 .child(
-                    "Folders shows every workspace open on every host this window \
-                     connects to, as a card: its branch, uncommitted files, agents, and \
-                     ports, with what waits on you first. Click a card to open it.",
+                    "Folders lists every workspace open on every host this window \
+                     connects to, with what waits on you first. Pick one to see its \
+                     uncommitted files, agents, commits, and ports in one place.",
                 ),
         )
 }

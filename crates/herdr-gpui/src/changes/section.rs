@@ -317,7 +317,7 @@ impl HerdrWindow {
             .child(card)
     }
 
-    fn changes_checkout(
+    pub(crate) fn changes_checkout(
         &self,
         repo: usize,
         position: usize,
@@ -547,7 +547,7 @@ impl HerdrWindow {
 
 /// How long ago, to the minute while recent and to the day once old: a
 /// commit may be months old.
-pub(super) fn age(elapsed: Duration) -> String {
+pub(crate) fn age(elapsed: Duration) -> String {
     match elapsed.as_secs() / 60 {
         0 => "just now".into(),
         minutes @ 1..60 => format!("{minutes} min ago"),

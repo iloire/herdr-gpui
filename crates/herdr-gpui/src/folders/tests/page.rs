@@ -63,35 +63,48 @@ fn endpoint(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) -> String {
 }
 
 #[gpui::test]
-fn every_workspace_is_a_card_and_the_waiting_one_leads(cx: &mut gpui::TestAppContext) {
+fn every_workspace_is_listed_and_the_waiting_one_leads_unfolded(cx: &mut gpui::TestAppContext) {
     let (view, cx) = fixture(cx);
     let host = endpoint(&view, cx);
-    assert!(bounds(cx, "folders-summary").is_some());
-    let waiting = bounds(cx, &format!("folder-{host}-w1")).expect("waiting card");
-    let working = bounds(cx, &format!("folder-{host}-w0")).expect("working card");
-    // Side by side in one row, or wrapped below: either way it comes first.
+    let waiting = bounds(cx, &format!("folder-{host}-w1")).expect("waiting row");
+    let working = bounds(cx, &format!("folder-{host}-w0")).expect("working row");
     assert!(
-        (waiting.origin.y, waiting.origin.x) < (working.origin.y, working.origin.x),
+        waiting.origin.y < working.origin.y,
         "{waiting:?} {working:?}"
     );
-    // The bar lists the section with the others.
+    // The first folder is unfolded, its parts under its row, its Home shown.
+    let home = bounds(cx, "folder-part-home").expect("parts");
+    assert!(home.origin.y > waiting.origin.y && home.origin.y < working.origin.y);
+    assert!(bounds(cx, "folder-home").is_some());
     assert!(cx.debug_bounds("activity-folders").is_some());
 }
 
 #[gpui::test]
-fn every_card_takes_one_width_and_a_row_never_overflows(cx: &mut gpui::TestAppContext) {
+fn picking_a_folder_unfolds_it_and_shows_its_home(cx: &mut gpui::TestAppContext) {
     let (view, cx) = fixture(cx);
     let host = endpoint(&view, cx);
-    let page = bounds(cx, "folders-cards").expect("cards");
-    let first = bounds(cx, &format!("folder-{host}-w1")).expect("first card");
-    let second = bounds(cx, &format!("folder-{host}-w0")).expect("second card");
-    assert_eq!(first.size.width, second.size.width);
-    assert!(first.size.width >= px(300.));
-    assert!(second.right() <= page.right(), "{second:?} past {page:?}");
+    click(cx, &format!("folder-{host}-w0"));
+    let picked = bounds(cx, &format!("folder-{host}-w0")).expect("row");
+    let home = bounds(cx, "folder-part-home").expect("parts");
+    assert!(
+        home.origin.y > picked.origin.y,
+        "the parts hang under the picked row"
+    );
+    assert!(bounds(cx, "folder-home-agents").is_some());
 }
 
 #[gpui::test]
-fn needs_me_keeps_only_cards_waiting_on_the_user(cx: &mut gpui::TestAppContext) {
+fn the_changes_part_fills_the_body_and_home_comes_back(cx: &mut gpui::TestAppContext) {
+    let (_, cx) = fixture(cx);
+    click(cx, "folder-part-changes");
+    assert!(bounds(cx, "folder-changes").is_some());
+    assert!(bounds(cx, "folder-home").is_none());
+    click(cx, "folder-part-home");
+    assert!(bounds(cx, "folder-home").is_some());
+}
+
+#[gpui::test]
+fn needs_me_keeps_only_folders_waiting_on_the_user(cx: &mut gpui::TestAppContext) {
     let (view, cx) = fixture(cx);
     let host = endpoint(&view, cx);
     click(cx, "folders-needs-me");
@@ -102,10 +115,9 @@ fn needs_me_keeps_only_cards_waiting_on_the_user(cx: &mut gpui::TestAppContext) 
 }
 
 #[gpui::test]
-fn clicking_a_card_opens_its_workspace_with_its_terminals(cx: &mut gpui::TestAppContext) {
+fn terminals_opens_the_folders_workspace(cx: &mut gpui::TestAppContext) {
     let (view, cx) = fixture(cx);
-    let host = endpoint(&view, cx);
-    click(cx, &format!("folder-{host}-w1"));
+    click(cx, "folder-part-terminals");
     cx.update(|_, cx| {
         let view = view.read(cx);
         assert_eq!(view.activity_section(), None, "the terminals are shown");

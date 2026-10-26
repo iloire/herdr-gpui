@@ -128,6 +128,40 @@ impl HerdrWindow {
         }
     }
 
+    /// Shows the checkout at `path` in the review, unless something of it
+    /// already is: its uncommitted changes, else its latest commit.
+    pub(crate) fn pick_checkout_change(&mut self, path: &str, cx: &mut Context<Self>) {
+        if self
+            .changes
+            .picked
+            .as_ref()
+            .is_some_and(|picked| picked.checkout() == path)
+        {
+            return;
+        }
+        let Some(checkout) = self
+            .changes
+            .repos()
+            .iter()
+            .flat_map(|repo| &repo.checkouts)
+            .map(|shown| &shown.checkout)
+            .find(|checkout| checkout.path == path)
+        else {
+            return;
+        };
+        let pick = if checkout.dirty() && checkout.branch.is_some() {
+            Pick::Uncommitted(checkout.path.clone())
+        } else if let Some(commit) = checkout.commits.first() {
+            Pick::Commit {
+                checkout: checkout.path.clone(),
+                sha: commit.sha.clone(),
+            }
+        } else {
+            return;
+        };
+        self.pick_change(pick, None, cx);
+    }
+
     /// Picks the item after the one picked, or before it.
     pub(super) fn step_change(&mut self, forward: bool, cx: &mut Context<Self>) {
         let picks = self.changes_picks();

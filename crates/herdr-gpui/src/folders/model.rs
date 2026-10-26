@@ -28,6 +28,11 @@ pub(crate) struct Card {
     pub endpoint: String,
     pub workspace: String,
     pub name: String,
+    /// The folder new tabs start in, as the daemon names it.
+    pub folder: String,
+    /// The checkout the Changes reader found the workspace in, by path.
+    pub checkout: Option<String>,
+    pub tabs: usize,
     pub host: Option<String>,
     pub branch: Option<String>,
     pub ahead: usize,
@@ -107,6 +112,14 @@ pub(crate) fn cards<'a>(hosts: impl IntoIterator<Item = Host<'a>>, rows: &[Row])
                     endpoint: host.id.to_owned(),
                     workspace: workspace.workspace_id.clone(),
                     name: workspace.label.clone(),
+                    folder: workspace.new_workspace_cwd.clone(),
+                    checkout: checkout.map(|checkout| checkout.path.clone()),
+                    tabs: host
+                        .snapshot
+                        .tabs
+                        .iter()
+                        .filter(|tab| tab.workspace_id == workspace.workspace_id)
+                        .count(),
                     host: host.label.map(str::to_owned),
                     branch: checkout
                         .and_then(|checkout| checkout.branch.clone())
@@ -156,19 +169,24 @@ fn checkout_of<'a>(
     Some(found.find(|checkout| holds(checkout)).unwrap_or(first))
 }
 
-/// The workspace's most pressing agent, the one that entered its state last
-/// among equals.
-fn agent_of(rows: &[Row], endpoint: &str, workspace: &str) -> Option<Agent> {
-    let mine: Vec<&Row> = rows
+/// The rows of `workspace`'s agents on `endpoint`, most pressing first.
+pub(crate) fn rows_of<'a>(rows: &'a [Row], endpoint: &str, workspace: &str) -> Vec<&'a Row> {
+    let mut mine: Vec<&Row> = rows
         .iter()
         .filter(|row| {
             matches!(&row.open, Open::Pane { endpoint: host, workspace: id, .. }
                 if host == endpoint && id == workspace)
         })
         .collect();
-    let lead = mine
-        .iter()
-        .min_by_key(|row| (row.state, std::cmp::Reverse(row.since)))?;
+    mine.sort_by_key(|row| (row.state, std::cmp::Reverse(row.since)));
+    mine
+}
+
+/// The workspace's most pressing agent, the one that entered its state last
+/// among equals.
+fn agent_of(rows: &[Row], endpoint: &str, workspace: &str) -> Option<Agent> {
+    let mine = rows_of(rows, endpoint, workspace);
+    let lead = mine.first()?;
     Some(Agent {
         state: lead.state,
         identity: lead.identity.clone(),

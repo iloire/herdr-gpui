@@ -287,7 +287,12 @@ impl HerdrWindow {
 
     /// Shows what a row stands for: an agent's pane among the terminals, or
     /// a run's item in the Issues section.
-    fn open_overview_row(&mut self, row: &Row, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn open_overview_row(
+        &mut self,
+        row: &Row,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.overview.menu = None;
         Marks::update(cx, |marks| marks.seen(&row.key));
         match &row.open {

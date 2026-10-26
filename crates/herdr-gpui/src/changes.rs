@@ -30,6 +30,7 @@ use crate::{HerdrWindow, sidebar::ActivityPanel};
 pub(crate) use discover::{Targets, discover};
 use gpui::{prelude::*, *};
 use herdr_vcs::changes::Checkout;
+pub(crate) use section::age;
 use std::{
     collections::HashSet,
     path::Path,
