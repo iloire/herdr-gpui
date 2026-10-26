@@ -30,11 +30,12 @@ impl Review {
     }
 
     /// Whether notes are being written or wait to be sent, which belong to
-    /// these changes and would be lost with them.
-    pub(super) fn holds_notes(&self) -> bool {
-        self.draft.is_some()
-            || self.editing.is_some()
-            || self.notes.iter().any(|note| note.sent.is_none())
+    /// these changes and would be lost with them. A note opened with nothing
+    /// typed yet holds nothing: a click on a header opens one.
+    pub(super) fn holds_notes(&self, cx: &App) -> bool {
+        let typing = (self.draft.is_some() || self.editing.is_some())
+            && !self.input.read(cx).text().trim().is_empty();
+        typing || self.notes.iter().any(|note| note.sent.is_none())
     }
 }
 
@@ -69,7 +70,7 @@ impl HerdrWindow {
             }
             return true;
         }
-        if shown.is_some_and(Review::holds_notes) {
+        if shown.is_some_and(|review| review.holds_notes(cx)) {
             self.show_flash(
                 Flash::warning("Send or remove this review's notes before picking other changes"),
                 cx,

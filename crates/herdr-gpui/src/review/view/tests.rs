@@ -242,6 +242,7 @@ mod cards;
 mod colours;
 mod commit;
 mod editor;
+mod empty_note;
 mod files;
 mod find_again;
 mod keys;
