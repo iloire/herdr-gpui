@@ -2,6 +2,7 @@
 
 mod page;
 mod parts;
+mod resize;
 
 use super::model::{Card, Dirty, Host, Rank, Summary, cards, hue, monogram};
 use crate::{

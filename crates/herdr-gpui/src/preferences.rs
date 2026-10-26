@@ -131,6 +131,9 @@ pub struct Chrome {
     pub notes_width: Option<f32>,
     /// The review's file list's width, once dragged.
     pub review_files_width: Option<f32>,
+    /// The Folders list's width, and its file tree's, once dragged.
+    pub folders_list_width: Option<f32>,
+    pub folders_tree_width: Option<f32>,
     /// The device IDs in the order the user dragged them into.
     pub device_order: Vec<String>,
 }
@@ -296,6 +299,8 @@ fn read_chrome(path: &Path) -> crate::Result<Chrome> {
         agent_sort,
         notes_width: panel_width("notes_width_px"),
         review_files_width: panel_width("review_files_width_px"),
+        folders_list_width: panel_width("folders_list_width_px"),
+        folders_tree_width: panel_width("folders_tree_width_px"),
         device_order: device_order(object.get("device_order")),
     })
 }
@@ -381,6 +386,12 @@ fn write_chrome(path: &Path, chrome: Chrome) -> crate::Result<()> {
                     .filter(|width| width.is_finite() && *width > 0.0),
                 "changes_list_width_px": chrome
                     .changes_list_width
+                    .filter(|width| width.is_finite() && *width > 0.0),
+                "folders_list_width_px": chrome
+                    .folders_list_width
+                    .filter(|width| width.is_finite() && *width > 0.0),
+                "folders_tree_width_px": chrome
+                    .folders_tree_width
                     .filter(|width| width.is_finite() && *width > 0.0),
                 "device_order": chrome.device_order,
             }),

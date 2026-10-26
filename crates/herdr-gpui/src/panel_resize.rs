@@ -36,6 +36,10 @@ pub(crate) enum PanelDrag {
     SettingsNavigation,
     /// The line between a side-by-side diff's halves.
     DiffSides,
+    /// The Folders list.
+    FoldersList,
+    /// A folder's file tree, beside the Folders list.
+    FoldersTree,
     /// The review's list of changed files.
     ReviewFiles,
 }
@@ -44,6 +48,10 @@ pub(crate) enum PanelDrag {
 pub(crate) const NOTES: PanelWidth = PanelWidth::new(300., 220.);
 /// The Changes section's list, left of its review.
 pub(crate) const CHANGES_LIST: PanelWidth = PanelWidth::new(420., 260.);
+/// The Folders list, as a page or beside the terminals.
+pub(crate) const FOLDERS_LIST: PanelWidth = PanelWidth::new(290., 180.);
+/// A folder's file tree, beside the Folders list.
+pub(crate) const FOLDERS_TREE: PanelWidth = PanelWidth::new(280., 160.);
 /// The review's list of changed files.
 pub(crate) const REVIEW_FILES: PanelWidth = PanelWidth::new(240., 160.);
 /// The settings window's section list.
@@ -190,6 +198,8 @@ impl crate::HerdrWindow {
     fn window_panel(&mut self, drag: PanelDrag) -> Option<(&mut PanelWidth, Side)> {
         match drag {
             PanelDrag::ChangesList => Some((&mut self.changes_list_width, Side::Left)),
+            PanelDrag::FoldersList => Some((&mut self.folders.list_width, Side::Left)),
+            PanelDrag::FoldersTree => Some((&mut self.folders.tree_width, Side::Left)),
             PanelDrag::ReviewNotes => Some((&mut self.notes_width, Side::Right)),
             #[cfg(any(target_os = "macos", windows))]
             PanelDrag::PageNotes => Some((&mut self.notes_width, Side::Right)),
@@ -202,6 +212,8 @@ impl crate::HerdrWindow {
     fn panel_at(&self, drag: PanelDrag) -> Option<(PanelWidth, Side)> {
         match drag {
             PanelDrag::ChangesList => Some((self.changes_list_width, Side::Left)),
+            PanelDrag::FoldersList => Some((self.folders.list_width, Side::Left)),
+            PanelDrag::FoldersTree => Some((self.folders.tree_width, Side::Left)),
             PanelDrag::ReviewNotes => Some((self.notes_width, Side::Right)),
             #[cfg(any(target_os = "macos", windows))]
             PanelDrag::PageNotes => Some((self.notes_width, Side::Right)),

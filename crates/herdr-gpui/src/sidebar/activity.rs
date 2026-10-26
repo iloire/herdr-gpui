@@ -297,8 +297,7 @@ impl HerdrWindow {
             return Some(BAR_WIDTH);
         }
         if self.folders_column() {
-            let tree = super::metrics::sidebar_width(self.sidebar_width, window_width);
-            return Some(BAR_WIDTH + self.folders_column_width(tree));
+            return Some(BAR_WIDTH + self.folders_column_width());
         }
         let width = self.sidebar_mode().width(self.sidebar_width, window_width);
         if !self.activity_bar_leads() {
@@ -421,12 +420,8 @@ impl HerdrWindow {
             return column;
         }
         if self.folders_column() {
-            let tree = super::metrics::sidebar_width(
-                self.sidebar_width,
-                f32::from(window.viewport_size().width),
-            );
             let row_height = line_height(&self.config.sidebar) + 4.;
-            return column.child(self.render_folders_column(tree, row_height, cx));
+            return column.child(self.render_folders_column(row_height, cx));
         }
         let files = self.activity_panel() == ActivityPanel::Files;
         let sidebar = match self.sidebar_mode() {

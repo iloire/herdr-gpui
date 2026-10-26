@@ -513,6 +513,12 @@ impl HerdrWindow {
         if self.changes_list_width.chosen().is_none() {
             self.changes_list_width.restore(chrome.changes_list_width);
         }
+        if self.folders.list_width.chosen().is_none() {
+            self.folders.list_width.restore(chrome.folders_list_width);
+        }
+        if self.folders.tree_width.chosen().is_none() {
+            self.folders.tree_width.restore(chrome.folders_tree_width);
+        }
         // A device dragged before the stored order loaded keeps its place.
         if self.device_order.is_empty() {
             self.device_order = chrome.device_order;

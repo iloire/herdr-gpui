@@ -4,8 +4,8 @@
 //! its own terminal area across the rest. The sidebar module sizes and
 //! places the column (`sidebar::activity`); this draws it.
 
-use super::{Part, list::LIST_WIDTH};
-use crate::{HerdrWindow, fonts::StyledFont};
+use super::Part;
+use crate::{HerdrWindow, fonts::StyledFont, panel_resize::PanelDrag};
 use gpui::{prelude::*, *};
 
 impl HerdrWindow {
@@ -20,19 +20,17 @@ impl HerdrWindow {
         self.folders.part == Part::Files
     }
 
-    /// The column's width: the list, and the tree beside it at `tree`.
-    pub(crate) fn folders_column_width(&self, tree: f32) -> f32 {
-        LIST_WIDTH + if self.folders_files() { tree } else { 0. }
+    /// The column's width: the list, and for Files the tree beside it,
+    /// each as dragged.
+    pub(crate) fn folders_column_width(&self) -> f32 {
+        let list = self.folders.list_width.width(self.viewport_width);
+        let tree = self.folders.tree_width.width(self.viewport_width);
+        list + if self.folders_files() { tree } else { 0. }
     }
 
-    /// The column: the folder list, then for Files the tree `tree` wide,
-    /// its rows `row_height` tall.
-    pub(crate) fn render_folders_column(
-        &self,
-        tree: f32,
-        row_height: f32,
-        cx: &mut Context<Self>,
-    ) -> Div {
+    /// The column: the folder list, then for Files the tree, its rows
+    /// `row_height` tall.
+    pub(crate) fn render_folders_column(&self, row_height: f32, cx: &mut Context<Self>) -> Div {
         let look = self.overview_look(cx);
         let theme = look.theme;
         let cards = self.folder_cards(cx);
@@ -55,7 +53,14 @@ impl HerdrWindow {
             .min_h_0()
             .child(list)
             .when(files, |column| {
-                column.child(self.render_files(tree, row_height, cx))
+                let tree = self.folders.tree_width.width(self.viewport_width);
+                column.child(self.resizable_panel(
+                    self.render_files(tree, row_height, cx),
+                    "folders-tree-resize",
+                    PanelDrag::FoldersTree,
+                    None,
+                    cx,
+                ))
             })
     }
 }

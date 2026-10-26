@@ -11,11 +11,10 @@ use crate::{
     HerdrWindow,
     config::{corners, mix},
     devices_overview::Look,
+    panel_resize::PanelDrag,
 };
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
-
-pub(super) const LIST_WIDTH: f32 = 290.;
 
 impl HerdrWindow {
     pub(super) fn render_folder_list(
@@ -25,13 +24,13 @@ impl HerdrWindow {
         listed: &[&Card],
         selected: Option<&Card>,
         cx: &mut Context<Self>,
-    ) -> Div {
+    ) -> Stateful<Div> {
         let theme = look.theme;
         let summary = super::model::Summary::of(cards);
-        div()
+        let list = div()
+            .id("folders-list")
             .debug_selector(|| "folders-list".into())
             .flex_none()
-            .w(px(LIST_WIDTH))
             .h_full()
             .flex()
             .flex_col()
@@ -100,7 +99,14 @@ impl HerdrWindow {
                                 .child("Nothing needs you."),
                         )
                     }),
-            )
+            );
+        self.resizable_panel(
+            list,
+            "folders-list-resize",
+            PanelDrag::FoldersList,
+            None,
+            cx,
+        )
     }
 
     /// Needs me or All.
