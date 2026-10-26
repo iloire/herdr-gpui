@@ -6,9 +6,9 @@ ships, strike it through, append ✅, and move it to **Done**.
 ## Open
 
 2. **Files: drop the Changed section above the tree.** The file tree's
-   "Changed" list (name, folder, age, +/−) takes a lot of vertical space.
-   Instead, show changed files only by coloring their names in the tree
-   itself (folders already carry a count).
+   "Changed" list (name, folder, age, +/−) takes a lot of vertical space,
+   and it repeats what the tree already shows: changed files are colored
+   there and folders carry a count. Remove the section.
 
 ## Done
 
