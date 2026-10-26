@@ -5,11 +5,6 @@ ships, strike it through, append ✅, and move it to **Done**.
 
 ## Open
 
-2. **Files: drop the Changed section above the tree.** The file tree's
-   "Changed" list (name, folder, age, +/−) takes a lot of vertical space,
-   and it repeats what the tree already shows: changed files are colored
-   there and folders carry a count. Remove the section.
-
 3. **Folders: a shorter folder row without its own branch line.** The
    branch line costs a row on every folder. The status bar shows only the
    focused tab's branch, so the list still needs it to tell worktrees of
@@ -18,6 +13,11 @@ ships, strike it through, append ✅, and move it to **Done**.
    behind. Alternative: merge it into the path line (`~/code/x · main ↑2`).
 
 ## Done
+
+2. ~~**Files: drop the Changed section above the tree.** The file tree's
+   "Changed" list (name, folder, age, +/−) takes a lot of vertical space,
+   and it repeats what the tree already shows: changed files are colored
+   there and folders carry a count. Remove the section.~~ ✅
 
 1. ~~**Folders: right-click menu on a folder row.** A context menu on each
    row of the Folders list that later actions can join. First action: copy

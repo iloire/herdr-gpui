@@ -1,5 +1,5 @@
 //! Drawing the Files section: a header naming the checkout and the folder
-//! followed, the changed files newest first, then the tree. Every row has
+//! followed, then the tree, its changed files colored. Every row has
 //! one height so the list draws only the rows in view, however large the
 //! checkout. A file opens in a code tab beside the terminals, a markdown
 //! file rendered (see `browser::markdown_toggle`), or with the secondary
@@ -12,17 +12,10 @@ use super::{
 use crate::{HerdrWindow, editor::EditorTarget, fonts::StyledFont};
 use gpui::{prelude::*, *};
 use herdr_vcs::code_index::Change;
-use std::{ops::Range, time::SystemTime};
+use std::ops::Range;
 
 /// How far each level of the tree steps in.
 const INDENT: f32 = 12.;
-
-/// One row of the list.
-enum Item<'a> {
-    Heading(&'static str),
-    Change(&'a Change),
-    Node(Row),
-}
 
 impl HerdrWindow {
     /// The section's column, `width` wide with rows `row_height` tall.
@@ -74,7 +67,7 @@ impl HerdrWindow {
                     .child(message),
             );
         }
-        let count = self.files_items_len();
+        let count = self.files.rows.len();
         column.child(
             uniform_list(
                 "files-list",
@@ -172,32 +165,6 @@ impl HerdrWindow {
             )
     }
 
-    /// The changed files' heading and rows, when there are any, then the
-    /// tree's.
-    fn files_items_len(&self) -> usize {
-        let recent = self.files.recent().len();
-        let changed = if recent > 0 { recent + 2 } else { 0 };
-        changed + self.files.rows.len()
-    }
-
-    fn files_item(&self, item: usize) -> Option<Item<'_>> {
-        let recent = self.files.recent();
-        if recent.is_empty() {
-            return self.files.rows.get(item).copied().map(Item::Node);
-        }
-        match item {
-            0 => Some(Item::Heading("Changed")),
-            item if item <= recent.len() => recent.get(item - 1).map(Item::Change),
-            item if item == recent.len() + 1 => Some(Item::Heading("Files")),
-            item => self
-                .files
-                .rows
-                .get(item - recent.len() - 2)
-                .copied()
-                .map(Item::Node),
-        }
-    }
-
     fn files_row(
         &self,
         item: usize,
@@ -213,124 +180,71 @@ impl HerdrWindow {
             .flex()
             .items_center()
             .gap(px(5.));
-        Some(match self.files_item(item)? {
-            Item::Heading(label) => row
-                .debug_selector(|| "files-heading".into())
-                .pt_1()
-                .text_size(px(self.config.sidebar.size - 2.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(rgb(theme.subtext()))
-                .child(label.to_uppercase())
-                .into_any_element(),
-            Item::Change(change) => {
-                let name = listing.index.files().get(change.file)?;
-                let (folder, leaf) = name.rsplit_once('/').unwrap_or(("", name));
-                let now = SystemTime::now();
-                let age = change.modified.map(|modified| {
-                    let ms = |time: SystemTime| {
-                        time.duration_since(SystemTime::UNIX_EPOCH)
-                            .map_or(0, |since| u64::try_from(since.as_millis()).unwrap_or(0))
-                    };
-                    crate::remote::ago(ms(modified), ms(now))
-                });
-                self.files_file_row(row, name, Some(change), cx)
-                    .debug_selector(|| "files-change".into())
+        let Row { node: id, depth } = *self.files.rows.get(item)?;
+        let node = listing.tree.node(id)?;
+        let indent = f32::from(depth) * INDENT;
+        Some(match node.entry {
+            Entry::Folder(_) => {
+                let open = self.files.is_open(&node.path);
+                let here = self.files.here.as_deref() == Some(node.path.as_str());
+                let path = node.path.clone();
+                row.debug_selector(|| "files-folder".into())
+                    .pl(px(8. + indent))
+                    .cursor_pointer()
+                    .hover(|style| style.bg(rgb(theme.active)))
                     .child(
-                        div()
+                        svg()
+                            .path(if open {
+                                "icons/chevron-down.svg"
+                            } else {
+                                "icons/chevron-right.svg"
+                            })
+                            .size(px(10.))
                             .flex_none()
-                            .max_w(relative(0.6))
-                            .truncate()
-                            .child(leaf.to_owned()),
+                            .text_color(rgb(theme.muted)),
+                    )
+                    .child(
+                        svg()
+                            .path("icons/folder.svg")
+                            .size(px(12.))
+                            .flex_none()
+                            .text_color(rgb(if here { theme.primary() } else { theme.muted })),
                     )
                     .child(
                         div()
                             .flex_1()
                             .min_w_0()
                             .truncate()
-                            .text_color(rgb(theme.muted))
-                            .child(folder.to_owned()),
+                            .when(here, |name| {
+                                name.text_color(rgb(theme.primary()))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                            })
+                            .child(node.name.clone()),
                     )
-                    .children(age.map(|age| {
-                        div()
-                            .flex_none()
-                            .text_size(px(self.config.sidebar.size - 2.))
-                            .text_color(rgb(theme.muted))
-                            .child(age)
+                    .when(node.changed > 0, |row| {
+                        row.child(
+                            div()
+                                .flex_none()
+                                .text_size(px(self.config.sidebar.size - 2.))
+                                .text_color(rgb(theme.ink(theme.palette[3])))
+                                .child(node.changed.to_string()),
+                        )
+                    })
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.files.toggle(&path);
+                        cx.notify();
                     }))
-                    .child(self.files_change_mark(Some(change)))
                     .into_any_element()
             }
-            Item::Node(Row { node: id, depth }) => {
-                let node = listing.tree.node(id)?;
-                let indent = f32::from(depth) * INDENT;
-                match node.entry {
-                    Entry::Folder(_) => {
-                        let open = self.files.is_open(&node.path);
-                        let here = self.files.here.as_deref() == Some(node.path.as_str());
-                        let path = node.path.clone();
-                        row.debug_selector(|| "files-folder".into())
-                            .pl(px(8. + indent))
-                            .cursor_pointer()
-                            .hover(|style| style.bg(rgb(theme.active)))
-                            .child(
-                                svg()
-                                    .path(if open {
-                                        "icons/chevron-down.svg"
-                                    } else {
-                                        "icons/chevron-right.svg"
-                                    })
-                                    .size(px(10.))
-                                    .flex_none()
-                                    .text_color(rgb(theme.muted)),
-                            )
-                            .child(
-                                svg()
-                                    .path("icons/folder.svg")
-                                    .size(px(12.))
-                                    .flex_none()
-                                    .text_color(rgb(if here {
-                                        theme.primary()
-                                    } else {
-                                        theme.muted
-                                    })),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .truncate()
-                                    .when(here, |name| {
-                                        name.text_color(rgb(theme.primary()))
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                    })
-                                    .child(node.name.clone()),
-                            )
-                            .when(node.changed > 0, |row| {
-                                row.child(
-                                    div()
-                                        .flex_none()
-                                        .text_size(px(self.config.sidebar.size - 2.))
-                                        .text_color(rgb(theme.ink(theme.palette[3])))
-                                        .child(node.changed.to_string()),
-                                )
-                            })
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.files.toggle(&path);
-                                cx.notify();
-                            }))
-                            .into_any_element()
-                    }
-                    Entry::File(file) => {
-                        let change = listing.index.change(file);
-                        // Past the chevron's room, so files line up with
-                        // their folder's name.
-                        self.files_file_row(row.pl(px(23. + indent)), &node.path, change, cx)
-                            .debug_selector(|| "files-file".into())
-                            .child(div().flex_1().min_w_0().truncate().child(node.name.clone()))
-                            .child(self.files_change_mark(change))
-                            .into_any_element()
-                    }
-                }
+            Entry::File(file) => {
+                let change = listing.index.change(file);
+                // Past the chevron's room, so files line up with
+                // their folder's name.
+                self.files_file_row(row.pl(px(23. + indent)), &node.path, change, cx)
+                    .debug_selector(|| "files-file".into())
+                    .child(div().flex_1().min_w_0().truncate().child(node.name.clone()))
+                    .child(self.files_change_mark(change))
+                    .into_any_element()
             }
         })
     }

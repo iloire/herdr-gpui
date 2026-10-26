@@ -34,8 +34,6 @@ use tree::{Row, Tree};
 
 /// How often the shown tree is read again.
 const SHOWN: Duration = Duration::from_secs(3);
-/// The changed files listed over the tree at most.
-const RECENT: usize = 8;
 
 /// A checkout as last read.
 #[derive(Debug)]
@@ -204,14 +202,6 @@ impl Files {
             (Some(listing), open) => listing.tree.rows(open.unwrap_or(&HashSet::new())),
             (None, _) => Vec::new(),
         };
-    }
-
-    /// The changed files listed over the tree, newest first.
-    pub(crate) fn recent(&self) -> &[herdr_vcs::code_index::Change] {
-        self.listing.as_ref().map_or(&[], |listing| {
-            let changes = listing.index.changes();
-            &changes[..changes.len().min(RECENT)]
-        })
     }
 }
 

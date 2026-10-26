@@ -62,15 +62,6 @@ fn pinning_holds_the_tree_while_the_focus_moves() {
 }
 
 #[test]
-fn the_changed_files_lead_newest_first_up_to_a_bound() {
-    let mut files = Files::default();
-    files.follow(Some("/repo".into()));
-    files.install(read("/repo", None), Instant::now());
-    assert_eq!(files.recent().len(), 1);
-    assert_eq!(files.recent()[0].file, 2);
-}
-
-#[test]
 fn a_failed_read_says_why_and_clears_the_tree() {
     let mut files = Files::default();
     files.follow(Some("/repo".into()));
