@@ -198,6 +198,7 @@ impl HerdrWindow {
             .dirty
             .map(|dirty| dirty.files)
             .filter(|files| *files > 0);
+        let ahead = card.ahead;
         let parts: [(&str, &str, &str, Option<usize>, Part); 4] = [
             ("home", "Home", "icons/pulse.svg", None, Part::Home),
             (
@@ -263,6 +264,16 @@ impl HerdrWindow {
                                 .text_size(look.small())
                                 .text_color(rgb(theme.muted))
                                 .child(count.to_string()),
+                        )
+                    })
+                    // Commits not pushed yet, as the branch line marks them.
+                    .when(part == Part::Changes && ahead > 0, |row| {
+                        row.child(
+                            div()
+                                .debug_selector(|| "folder-part-changes-ahead".into())
+                                .text_size(look.small())
+                                .text_color(rgb(look.status(AgentStatus::Working)))
+                                .child(format!("\u{2191}{ahead}")),
                         )
                     })
             }))

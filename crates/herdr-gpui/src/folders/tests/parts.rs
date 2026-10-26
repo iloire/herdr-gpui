@@ -134,3 +134,26 @@ fn the_list_follows_a_workspace_switched_from_the_keyboard(cx: &mut gpui::TestAp
         "the parts hang under the workspace shown"
     );
 }
+
+#[gpui::test]
+fn changes_marks_commits_not_pushed_yet(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = fixture(cx);
+    // w1 leads, unfolded; nothing to push yet.
+    assert!(bounds(cx, "folder-part-changes-ahead").is_none());
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            if let Some(snapshot) = view.live.snapshot.as_deref() {
+                let mut shown = snapshot.clone();
+                for workspace in &mut shown.workspaces {
+                    workspace.git_ahead_behind = Some((2, 0));
+                }
+                view.live.snapshot = Some(Arc::new(shown));
+            }
+            cx.notify();
+        })
+    });
+    draw(cx);
+    let changes = bounds(cx, "folder-part-changes").unwrap();
+    let ahead = bounds(cx, "folder-part-changes-ahead").unwrap();
+    assert!(changes.contains(&ahead.center()), "on the Changes row");
+}
