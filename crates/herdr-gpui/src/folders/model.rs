@@ -61,6 +61,32 @@ pub(crate) struct Agent {
 }
 
 impl Card {
+    /// The folder's own name, which titles its card: the page lists folders,
+    /// and a workspace label can be anything. The label when the daemon
+    /// names no folder.
+    pub(crate) fn title(&self) -> &str {
+        Path::new(&self.folder)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or(&self.name)
+    }
+
+    /// The workspace's label, when it names the folder something other than
+    /// its own name, as a second workspace in one folder does.
+    pub(crate) fn alias(&self) -> Option<&str> {
+        Some(self.name.as_str()).filter(|name| *name != self.title())
+    }
+
+    /// The folder's path as the user reads it: `~` for this computer's home,
+    /// in full on another host, whose home is not this one's.
+    pub(crate) fn shown_folder(&self) -> String {
+        if self.host.is_some() {
+            self.folder.clone()
+        } else {
+            crate::folder::home_relative(&self.folder)
+        }
+    }
+
     /// Whether the folder's agent waits on the user.
     pub(crate) fn waiting(&self) -> bool {
         self.agent

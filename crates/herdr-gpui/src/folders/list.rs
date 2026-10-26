@@ -259,7 +259,7 @@ impl HerdrWindow {
                     .bottom(px(8.))
                     .w(px(3.))
                     .rounded_full()
-                    .bg(rgb(folder_color(look, &card.name))),
+                    .bg(rgb(folder_color(look, card.title()))),
             )
             .when(open, |row| {
                 row.bg(rgb(if self.folders.part == Part::Home {
@@ -294,12 +294,8 @@ impl HerdrWindow {
                     .flex_col()
                     .flex_1()
                     .min_w_0()
-                    .child(
-                        div()
-                            .truncate()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(card.name.clone()),
-                    )
+                    .child(super::view::title_line(look, card, look.ui.size))
+                    .child(super::view::path_line(look, card))
                     .child(super::view::branch_line(look, card))
                     // What runs here, under the branch, so it is seen
                     // without opening the folder's Home.

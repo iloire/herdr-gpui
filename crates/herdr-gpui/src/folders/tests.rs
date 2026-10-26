@@ -2,6 +2,7 @@
 
 mod drag;
 mod edge_bar;
+mod naming;
 mod new_button;
 mod page;
 mod parts;

@@ -258,33 +258,66 @@ pub(super) fn host_chip(look: &Look, host: String) -> Div {
         .child(host)
 }
 
+/// A folder's name at `size`, followed by its workspace's label when that
+/// says something else, so a renamed or second workspace still reads as
+/// the folder it is in.
+pub(super) fn title_line(look: &Look, card: &Card, size: f32) -> Div {
+    let theme = look.theme;
+    div()
+        .flex()
+        .items_baseline()
+        .gap_1p5()
+        .min_w_0()
+        .child(
+            div()
+                .flex_none()
+                .max_w_full()
+                .truncate()
+                .text_size(px(size))
+                .font_weight(FontWeight::SEMIBOLD)
+                .child(card.title().to_owned()),
+        )
+        .when_some(card.alias(), |line, alias| {
+            line.child(
+                div()
+                    .min_w_0()
+                    .truncate()
+                    .text_size(look.small())
+                    .text_color(rgb(theme.muted))
+                    .child(alias.to_owned()),
+            )
+        })
+}
+
+/// Where a folder is, on its own line of its row.
+pub(super) fn path_line(look: &Look, card: &Card) -> Div {
+    let selector = format!("folder-path-{}", card.workspace);
+    div()
+        .debug_selector(move || selector.clone())
+        .min_w_0()
+        .truncate()
+        .text_size(look.small())
+        .text_color(rgb(look.theme.muted))
+        .child(card.shown_folder())
+}
+
 /// The selected folder's title: mark, name, branch, and where it is.
 pub(super) fn folder_header(look: &Look, card: &Card) -> Div {
     let theme = look.theme;
-    let folder = if card.host.is_some() {
-        card.folder.clone()
-    } else {
-        crate::folder::home_relative(&card.folder)
-    };
+    let folder = card.shown_folder();
     div()
         .flex()
         .items_center()
         .gap_3()
         .min_w_0()
-        .child(mark(look, &card.name, 34.))
+        .child(mark(look, card.title(), 34.))
         .child(
             div()
                 .flex()
                 .flex_col()
                 .flex_1()
                 .min_w_0()
-                .child(
-                    div()
-                        .truncate()
-                        .text_size(px(look.ui.size + 3.))
-                        .font_weight(FontWeight::BOLD)
-                        .child(card.name.clone()),
-                )
+                .child(title_line(look, card, look.ui.size + 3.))
                 .child(
                     div()
                         .flex()
