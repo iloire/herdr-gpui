@@ -61,7 +61,8 @@ impl HerdrWindow {
                             summary.waiting,
                         ))
                     })
-                    .child(self.folder_filter(look, cx)),
+                    .child(self.folder_filter(look, cx))
+                    .child(self.folder_new(look, cx)),
             )
             .child(
                 div()
@@ -133,6 +134,37 @@ impl HerdrWindow {
             .gap_0p5()
             .child(option("folders-needs-me", "Needs me", false, cx))
             .child(option("folders-all", "All", true, cx))
+    }
+
+    /// The + that opens a project from the palette, recent ones first.
+    fn folder_new(&self, look: &Look, cx: &mut Context<Self>) -> Stateful<Div> {
+        let theme = look.theme;
+        let (foreground, surface) = (theme.foreground, theme.surface);
+        div()
+            .id("folders-new")
+            .debug_selector(|| "folders-new".into())
+            .flex_none()
+            .p_0p5()
+            .rounded(px(corners::SMALL))
+            .cursor_pointer()
+            .hover(|style| style.bg(rgb(theme.active)))
+            .tooltip(move |_, cx| {
+                cx.new(|_| crate::menu::SettingsHint {
+                    text: "Open project".into(),
+                    foreground,
+                    surface,
+                })
+                .into()
+            })
+            .on_click(cx.listener(|this, _, window, cx| {
+                this.open_project_from_folders(window, cx);
+            }))
+            .child(
+                svg()
+                    .size(px(13.))
+                    .path("icons/plus.svg")
+                    .text_color(rgb(theme.muted)),
+            )
     }
 
     fn folder_row(

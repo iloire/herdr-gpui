@@ -1,5 +1,6 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
+mod new_button;
 mod page;
 mod parts;
 mod resize;

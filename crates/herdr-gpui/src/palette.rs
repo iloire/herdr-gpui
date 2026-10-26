@@ -393,6 +393,12 @@ enum ProjectOperation {
 }
 
 impl Palette {
+    /// The filter shown, for tests outside this module.
+    #[cfg(test)]
+    pub(crate) fn filter(&self) -> Filter {
+        self.filter
+    }
+
     fn selected_identity(&self) -> Option<Identity> {
         self.filtered
             .get(self.selected)
@@ -540,6 +546,11 @@ impl HerdrWindow {
                 cx.notify();
             });
         }));
+    }
+
+    /// Opens the palette on its projects, the most recent first.
+    pub(crate) fn open_projects_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_palette(Filter::Projects, window, cx);
     }
 
     pub(super) fn open_palette(

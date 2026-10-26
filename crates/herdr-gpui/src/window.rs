@@ -610,6 +610,9 @@ impl HerdrWindow {
             (old_tab, focused_tab(&self.live))
             && (old_workspace != workspace || old_tab.as_ref() != Some(&tab))
         {
+            if old_workspace != workspace {
+                self.folder_arrived(window, cx);
+            }
             self.terminal_focus_moved(&tab, old_workspace != workspace, cx);
         }
         // After the focus check: a swap replaces `live` with another

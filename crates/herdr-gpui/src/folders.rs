@@ -58,6 +58,9 @@ pub(crate) struct Page {
     all: bool,
     /// The folder unfolded; the first listed when unset or gone.
     selected: Option<Key>,
+    /// Set by the list's +: the workspace the window arrives in next, the
+    /// project opened or created, is selected on its Home.
+    follow_opened: bool,
     /// The selected folder's part.
     pub(crate) part: Part,
     /// The part each folder was last left on.
@@ -73,6 +76,7 @@ impl Default for Page {
         Self {
             all: true,
             selected: None,
+            follow_opened: false,
             part: Part::Home,
             parts: HashMap::new(),
             list_width: crate::panel_resize::FOLDERS_LIST,
@@ -157,6 +161,7 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) {
         let key = (card.endpoint.clone(), card.workspace.clone());
+        self.folders.follow_opened = false;
         let part = part
             .or_else(|| self.folders.parts.get(&key).copied())
             .unwrap_or(self.folders.part);
@@ -223,13 +228,34 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) {
         self.show_activity_panel(ActivityPanel::Folders, window, cx);
-        let cards = self.folder_cards(cx);
-        let shown = cards
-            .iter()
-            .find(|card| self.shows_workspace(card.endpoint_index, &card.workspace))
-            .cloned();
-        if let Some(card) = shown {
+        if let Some(card) = self.shown_folder(cx) {
             self.select_folder(&card, Some(part), window, cx);
+        }
+    }
+
+    /// The folder of the workspace the window shows.
+    fn shown_folder(&self, cx: &App) -> Option<Card> {
+        self.folder_cards(cx)
+            .into_iter()
+            .find(|card| self.shows_workspace(card.endpoint_index, &card.workspace))
+    }
+
+    /// The list's +: the palette on its projects, the most recent first.
+    /// Choosing one focuses or creates its workspace, which `folder_arrived`
+    /// then selects.
+    fn open_project_from_folders(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_projects_palette(window, cx);
+        self.folders.follow_opened = self.menu.palette.is_some();
+    }
+
+    /// The window arrived in another workspace. After the list's +, that is
+    /// the project opened, and Folders selects it on its Home.
+    pub(crate) fn folder_arrived(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !std::mem::take(&mut self.folders.follow_opened) {
+            return;
+        }
+        if let Some(card) = self.shown_folder(cx) {
+            self.select_folder(&card, Some(Part::Home), window, cx);
         }
     }
 
