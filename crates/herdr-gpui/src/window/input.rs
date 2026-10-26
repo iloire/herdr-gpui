@@ -378,6 +378,7 @@ impl HerdrWindow {
         self.clear_retained_selection(cx);
         if event.keystroke.key == "escape"
             && (self.cancel_workspace_drag(cx)
+                | self.cancel_folder_drag(cx)
                 | self.cancel_device_drag(cx)
                 | self.cancel_tab_drag(cx))
         {

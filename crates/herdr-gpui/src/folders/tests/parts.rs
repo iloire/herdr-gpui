@@ -104,20 +104,20 @@ fn files_shows_only_files_beside_the_tree(cx: &mut gpui::TestAppContext) {
 fn each_folder_opens_at_the_part_it_was_left_on(cx: &mut gpui::TestAppContext) {
     let (view, cx) = fixture(cx);
     let host = endpoint(&view, cx);
-    // w1 leads, as it waits on the user: leave it at its Terminals.
+    // w0 leads, first in the sidebar: leave it at its Terminals.
     click(cx, "folder-part-terminals");
-    focus(&view, "w1", cx);
-    // w0 was never opened, so it follows the part shown.
-    click(cx, &format!("folder-{host}-w0"));
     focus(&view, "w0", cx);
-    assert_eq!(part(&view, cx), (Part::Terminals, true));
-    click(cx, &format!("folder-{host}-w0"));
-    assert_eq!(part(&view, cx), (Part::Home, false));
-    // Back to w1: its Terminals, and back to w0: its Home.
+    // w1 was never opened, so it follows the part shown.
     click(cx, &format!("folder-{host}-w1"));
-    assert_eq!(part(&view, cx), (Part::Terminals, true));
     focus(&view, "w1", cx);
+    assert_eq!(part(&view, cx), (Part::Terminals, true));
+    click(cx, &format!("folder-{host}-w1"));
+    assert_eq!(part(&view, cx), (Part::Home, false));
+    // Back to w0: its Terminals, and back to w1: its Home.
     click(cx, &format!("folder-{host}-w0"));
+    assert_eq!(part(&view, cx), (Part::Terminals, true));
+    focus(&view, "w0", cx);
+    click(cx, &format!("folder-{host}-w1"));
     assert_eq!(part(&view, cx), (Part::Home, false));
     assert!(bounds(cx, "folder-home").is_some());
 }

@@ -40,8 +40,7 @@ impl HerdrWindow {
         let look = self.overview_look(cx);
         let theme = look.theme;
         let cards = self.folder_cards(cx);
-        let listed = self.listed_folders(&cards);
-        let selected = self.selected_folder(&listed);
+        let selected = self.selected_folder(&cards);
         let list = div()
             .flex()
             .h_full()
@@ -49,7 +48,7 @@ impl HerdrWindow {
             .text_color(rgb(theme.foreground))
             .text_font(look.ui)
             .text_size(px(look.ui.size))
-            .child(self.render_folder_list(&look, &cards, &listed, selected, cx));
+            .child(self.render_folder_list(&look, &cards, selected, cx));
         let files = self.folders_files();
         div()
             .debug_selector(|| "folders-column".into())

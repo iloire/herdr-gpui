@@ -18,6 +18,7 @@
 //! and the port monitors. Drawing reads that prepared state only.
 
 mod column;
+mod drag;
 mod home;
 mod list;
 mod model;
@@ -54,10 +55,10 @@ type Key = (String, String);
 
 /// The page's own state in a window.
 pub(crate) struct Page {
-    /// Whether every folder is listed, or only those that need the user.
-    all: bool,
     /// The folder unfolded; the first listed when unset or gone.
     selected: Option<Key>,
+    /// A press on a folder row that may become, or is, a reorder.
+    drag: Option<drag::FolderDrag>,
     /// Set by the list's +: the workspace the window arrives in next, the
     /// project opened or created, is selected on its Home.
     follow_opened: bool,
@@ -74,8 +75,8 @@ pub(crate) struct Page {
 impl Default for Page {
     fn default() -> Self {
         Self {
-            all: true,
             selected: None,
+            drag: None,
             follow_opened: false,
             part: Part::Home,
             parts: HashMap::new(),
@@ -119,20 +120,12 @@ impl HerdrWindow {
         model::cards(hosts, &rows)
     }
 
-    /// The folders the list shows, as the filter leaves them.
-    fn listed_folders<'a>(&self, cards: &'a [Card]) -> Vec<&'a Card> {
-        cards
-            .iter()
-            .filter(|card| self.folders.all || card.needs_me())
-            .collect()
-    }
-
     /// The folder unfolded: beside the terminals, the workspace the window
     /// shows, which the keyboard may have moved to; else the one picked, else
     /// the first listed.
-    fn selected_folder<'a>(&self, listed: &[&'a Card]) -> Option<&'a Card> {
+    fn selected_folder<'a>(&self, cards: &'a [Card]) -> Option<&'a Card> {
         let shown = || {
-            listed
+            cards
                 .iter()
                 .find(|card| self.shows_workspace(card.endpoint_index, &card.workspace))
         };
@@ -141,13 +134,13 @@ impl HerdrWindow {
                 .selected
                 .as_ref()
                 .and_then(|(endpoint, workspace)| {
-                    listed
+                    cards
                         .iter()
                         .find(|card| card.endpoint == *endpoint && card.workspace == *workspace)
                 })
         };
         let shown = self.folders.part.beside_terminals().then(shown).flatten();
-        shown.or_else(picked).or_else(|| listed.first()).copied()
+        shown.or_else(picked).or_else(|| cards.first())
     }
 
     /// Unfolds a folder at `part`, or, with none given, at the part it was
@@ -257,10 +250,5 @@ impl HerdrWindow {
         if let Some(card) = self.shown_folder(cx) {
             self.select_folder(&card, Some(Part::Home), window, cx);
         }
-    }
-
-    fn show_all_folders(&mut self, all: bool, cx: &mut Context<Self>) {
-        self.folders.all = all;
-        cx.notify();
     }
 }

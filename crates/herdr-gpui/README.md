@@ -2260,8 +2260,11 @@ window at once, and `herdr-gpui ui panel NAME` shows a section.
   column beside the list shows each host's CPU, memory, agents, and ports;
   each host folds, and the column folds to a strip of load dots. The icon
   counts what needs you.
-- **Folders** lists every open workspace on every connected host, what needs
-  you first, with its branch, uncommitted files, and agent. The folder picked
+- **Folders** lists every open workspace on every connected host, in the
+  sidebar's order, with its branch, uncommitted files, and agent, and a bar
+  of its own color down its left edge. Drag a folder to reorder it among its
+  host's folders: the move goes to Herdr, so the sidebar and every other
+  client follow, and Escape drops it back where it was. The folder picked
   unfolds into **Terminals**, **Changes**, and **Files**, and each folder
   opens at the part it was left on; a click on the open folder's own row
   shows its Home, an overview. Home and Changes fill the

@@ -40,7 +40,7 @@ pub(crate) struct Card {
     /// `None` when no read of this host's files was made.
     pub dirty: Option<Dirty>,
     pub agent: Option<Agent>,
-    /// The workspace's place in its host's sidebar, which orders ties.
+    /// The workspace's place in its host's sidebar, which orders the list.
     number: usize,
 }
 
@@ -60,41 +60,17 @@ pub(crate) struct Agent {
     pub count: usize,
 }
 
-/// What a card asks of the user, most pressing first.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum Rank {
-    NeedsYou,
-    Dirty,
-    Unpushed,
-    Working,
-    Quiet,
-}
-
 impl Card {
-    pub(crate) fn rank(&self) -> Rank {
-        let state = self.agent.as_ref().map(|agent| agent.state);
-        if state.is_some_and(State::needs_you) {
-            Rank::NeedsYou
-        } else if self.dirty.is_some_and(|dirty| dirty.files > 0) {
-            Rank::Dirty
-        } else if self.ahead > 0 {
-            Rank::Unpushed
-        } else if state == Some(State::Working) {
-            Rank::Working
-        } else {
-            Rank::Quiet
-        }
-    }
-
-    /// Whether Needs me lists the card: it waits on the user, or holds work
-    /// not yet committed or pushed.
-    pub(crate) fn needs_me(&self) -> bool {
-        self.rank() <= Rank::Unpushed
+    /// Whether the folder's agent waits on the user.
+    pub(crate) fn waiting(&self) -> bool {
+        self.agent
+            .as_ref()
+            .is_some_and(|agent| agent.state.needs_you())
     }
 }
 
-/// Every host's workspaces as cards, most pressing first, then in host and
-/// sidebar order.
+/// Every host's workspaces as cards, in host and sidebar order: the order
+/// the user arranges, by dragging here or in the sidebar.
 pub(crate) fn cards<'a>(hosts: impl IntoIterator<Item = Host<'a>>, rows: &[Row]) -> Vec<Card> {
     let mut cards: Vec<Card> = hosts
         .into_iter()
@@ -144,7 +120,7 @@ pub(crate) fn cards<'a>(hosts: impl IntoIterator<Item = Host<'a>>, rows: &[Row])
             })
         })
         .collect();
-    cards.sort_by_key(|card| (card.rank(), card.endpoint_index, card.number));
+    cards.sort_by_key(|card| (card.endpoint_index, card.number));
     cards
 }
 
@@ -211,10 +187,7 @@ impl Summary {
         hosts.sort_unstable();
         hosts.dedup();
         Self {
-            waiting: cards
-                .iter()
-                .filter(|card| card.rank() == Rank::NeedsYou)
-                .count(),
+            waiting: cards.iter().filter(|card| card.waiting()).count(),
             dirty: cards
                 .iter()
                 .filter(|card| card.dirty.is_some_and(|dirty| dirty.files > 0))

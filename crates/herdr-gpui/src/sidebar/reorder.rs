@@ -110,12 +110,19 @@ impl Target {
 /// Where a drop lands: `workspace_ids` land, in that order, before
 /// `before`, or at the end of the list without one.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct MoveBlock {
+pub(crate) struct MoveBlock {
     workspace_ids: Vec<String>,
     before: Option<String>,
 }
 
 impl MoveBlock {
+    pub(crate) fn new(workspace_ids: Vec<String>, before: Option<String>) -> Self {
+        Self {
+            workspace_ids,
+            before,
+        }
+    }
+
     #[cfg(test)]
     fn params(&self) -> serde_json::Value {
         serde_json::json!({
@@ -129,7 +136,11 @@ impl MoveBlock {
     /// daemon offers it (`single`), so it announces `workspace.moved` as the
     /// same drag in Herdr's TUI does. A group's members may sit apart in the
     /// daemon's order, which only `workspace.move_block` gathers in one step.
-    fn reorder(&self, workspaces: &[ClientShellWorkspace], single: bool) -> WorkspaceReorder {
+    pub(crate) fn reorder(
+        &self,
+        workspaces: &[ClientShellWorkspace],
+        single: bool,
+    ) -> WorkspaceReorder {
         if single && let [workspace_id] = self.workspace_ids.as_slice() {
             // The index counts the workspace still in place, so landing
             // before `before` is `before`'s own index, and last is the length.

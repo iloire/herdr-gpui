@@ -21,16 +21,9 @@ impl HerdrWindow {
         let look = self.overview_look(cx);
         let theme = look.theme;
         let cards = self.folder_cards(cx);
-        let listed = self.listed_folders(&cards);
-        let selected = self.selected_folder(&listed);
+        let selected = self.selected_folder(&cards);
         let body = match selected {
-            None if cards.is_empty() => empty(&look).into_any_element(),
-            None => div()
-                .debug_selector(|| "folders-settled".into())
-                .p_5()
-                .text_color(rgb(theme.muted))
-                .child("Nothing needs you in any folder.")
-                .into_any_element(),
+            None => empty(&look).into_any_element(),
             Some(card) => match self.folders.part {
                 Part::Changes => self.render_folder_changes(&look, card, cx),
                 // The other parts are a column beside the terminals, and
@@ -52,7 +45,7 @@ impl HerdrWindow {
             .text_color(rgb(theme.foreground))
             .text_font(look.ui)
             .text_size(px(look.ui.size))
-            .child(self.render_folder_list(&look, &cards, &listed, selected, cx))
+            .child(self.render_folder_list(&look, &cards, selected, cx))
             .child(
                 div()
                     .flex()

@@ -1,5 +1,6 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
+mod drag;
 mod edge_bar;
 mod new_button;
 mod page;
@@ -7,7 +8,7 @@ mod parts;
 mod resize;
 mod status_icons;
 
-use super::model::{Card, Dirty, Host, Rank, Summary, cards, hue, monogram};
+use super::model::{Card, Dirty, Host, Summary, cards, hue, monogram};
 use crate::{
     changes::{Repo, Shown, Workspace},
     overview::{Key, Open, Row, State},
@@ -105,7 +106,7 @@ fn names(cards: &[Card]) -> Vec<&str> {
 }
 
 #[test]
-fn cards_lead_with_what_needs_the_user_then_follow_sidebar_order() {
+fn cards_follow_sidebar_order_whatever_needs_the_user() {
     let local = snapshot(&[
         ("w1", "quiet", "/code/quiet", "main", (0, 0)),
         ("w2", "dirty", "/code/dirty", "main", (0, 0)),
@@ -130,12 +131,10 @@ fn cards_lead_with_what_needs_the_user_then_follow_sidebar_order() {
     );
     assert_eq!(
         names(&cards),
-        ["waiting", "dirty", "unpushed", "working", "quiet"]
+        ["quiet", "dirty", "unpushed", "waiting", "working"]
     );
-    let ranks: Vec<Rank> = cards.iter().map(Card::rank).collect();
-    assert!(ranks.is_sorted());
-    assert!(cards[..3].iter().all(Card::needs_me));
-    assert!(!cards[3].needs_me() && !cards[4].needs_me());
+    let waiting: Vec<bool> = cards.iter().map(Card::waiting).collect();
+    assert_eq!(waiting, [false, false, false, true, false]);
 }
 
 #[test]

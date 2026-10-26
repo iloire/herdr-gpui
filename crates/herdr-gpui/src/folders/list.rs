@@ -5,7 +5,8 @@
 
 use super::{
     Part,
-    model::{Card, Rank},
+    drag::Rows,
+    model::Card,
     view::{bubble, folder_color, host_chip},
 };
 use crate::{
@@ -17,17 +18,44 @@ use crate::{
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
 
+/// The space between folder rows, which a drag's preview counts in each
+/// row's height.
+const ROW_GAP: f32 = 2.;
+
 impl HerdrWindow {
     pub(super) fn render_folder_list(
         &self,
         look: &Look,
         cards: &[Card],
-        listed: &[&Card],
         selected: Option<&Card>,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let theme = look.theme;
         let summary = super::model::Summary::of(cards);
+        let now = crate::motion::now();
+        // A lifted drag's rows and where each paints, from the heights the
+        // last frame laid out: shifting moves rows, never resizes them.
+        let drag = self.folders.drag.as_ref();
+        let prepared = drag.zip(self.folder_drag_rows(cards)).map(|(drag, rows)| {
+            let heights: Vec<f32> = rows
+                .items
+                .iter()
+                .map(|&item| {
+                    self.folders
+                        .list_scroll
+                        .bounds_for_item(item)
+                        .map_or(0., |bounds| f32::from(bounds.size.height) + ROW_GAP)
+                })
+                .collect();
+            let (shifts, sliding) = drag.shifts(&rows, &heights, now);
+            (rows, shifts, sliding)
+        });
+        let shift_of = |item: usize| {
+            prepared.as_ref().and_then(|(rows, shifts, _)| {
+                let unit = rows.items.iter().position(|&row| row == item)?;
+                shifts.get(unit).copied()
+            })
+        };
         let list = div()
             .id("folders-list")
             .debug_selector(|| "folders-list".into())
@@ -61,7 +89,6 @@ impl HerdrWindow {
                             summary.waiting,
                         ))
                     })
-                    .child(self.folder_filter(look, cx))
                     .child(self.folder_new(look, cx)),
             )
             .child(
@@ -75,33 +102,37 @@ impl HerdrWindow {
                     .pb_2()
                     .flex()
                     .flex_col()
-                    .gap_0p5()
-                    .children(listed.iter().map(|card| {
+                    .gap(px(ROW_GAP))
+                    .children(cards.iter().enumerate().map(|(item, card)| {
                         let open = selected.is_some_and(|selected| {
                             selected.endpoint == card.endpoint
                                 && selected.workspace == card.workspace
                         });
-                        let row = self.folder_row(look, card, open, cx);
-                        if open {
-                            div()
-                                .flex()
-                                .flex_col()
-                                .child(row)
-                                .child(self.folder_parts(look, card, cx))
+                        let carried = drag
+                            .is_some_and(|drag| drag.carries(card.endpoint_index, &card.workspace));
+                        let row = self.folder_row(look, card, open, carried, cx);
+                        let unit = div()
+                            .relative()
+                            .flex()
+                            .flex_col()
+                            .child(row)
+                            .when(open, |unit| unit.child(self.folder_parts(look, card, cx)))
+                            .when_some(
+                                shift_of(item).filter(|shift| *shift != 0.),
+                                |unit, shift| unit.top(px(shift)),
+                            );
+                        if carried {
+                            // Painted last so it floats over the rows it
+                            // passes, while its slot keeps theirs stable.
+                            deferred(unit).with_priority(1).into_any_element()
                         } else {
-                            div().child(row)
+                            unit.into_any_element()
                         }
-                    }))
-                    .when(listed.is_empty() && !cards.is_empty(), |rows| {
-                        rows.child(
-                            div()
-                                .p_2()
-                                .text_size(look.small())
-                                .text_color(rgb(theme.muted))
-                                .child("Nothing needs you."),
-                        )
-                    }),
-            );
+                    })),
+            )
+            .when(drag.is_some(), |list| {
+                list.child(self.folder_drag_capture(prepared, cx))
+            });
         self.resizable_panel(
             list,
             "folders-list-resize",
@@ -109,31 +140,6 @@ impl HerdrWindow {
             None,
             cx,
         )
-    }
-
-    /// Needs me or All.
-    fn folder_filter(&self, look: &Look, cx: &mut Context<Self>) -> Div {
-        let theme = look.theme;
-        let option = |id: &'static str, label: &'static str, all: bool, cx: &mut Context<Self>| {
-            let on = self.folders.all == all;
-            div()
-                .id(id)
-                .debug_selector(move || id.into())
-                .px_1p5()
-                .rounded(px(corners::SMALL))
-                .cursor_pointer()
-                .text_size(look.small())
-                .when(on, |pill| pill.bg(rgb(theme.active)))
-                .when(!on, |pill| pill.text_color(rgb(theme.muted)))
-                .on_click(cx.listener(move |this, _, _, cx| this.show_all_folders(all, cx)))
-                .child(label)
-        };
-        div()
-            .flex()
-            .flex_none()
-            .gap_0p5()
-            .child(option("folders-needs-me", "Needs me", false, cx))
-            .child(option("folders-all", "All", true, cx))
     }
 
     /// The + that opens a project from the palette, recent ones first.
@@ -167,18 +173,70 @@ impl HerdrWindow {
             )
     }
 
+    /// Follows the pointer anywhere in the window while a folder drag is
+    /// armed, so the drag continues off the list and its release is never a
+    /// click on what lies under it.
+    fn folder_drag_capture(
+        &self,
+        prepared: Option<(Rows, Vec<f32>, bool)>,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let view = cx.entity();
+        canvas(
+            |_, _, _| (),
+            move |_, _, window, _| {
+                let (rows, sliding) = match prepared {
+                    Some((rows, shifts, sliding)) => (Some((rows, shifts)), sliding),
+                    None => (None, false),
+                };
+                if sliding {
+                    window.request_animation_frame();
+                }
+                let moving = view.clone();
+                let moved = rows.clone();
+                window.on_mouse_event(move |event: &MouseMoveEvent, phase, _, cx| {
+                    if phase != DispatchPhase::Capture {
+                        return;
+                    }
+                    moving.update(cx, |this, cx| {
+                        let held = event.pressed_button == Some(MouseButton::Left);
+                        if this.move_folder_drag(event.position, held, moved.as_ref(), cx) {
+                            cx.stop_propagation();
+                        }
+                    });
+                });
+                window.on_mouse_event(move |event: &MouseUpEvent, phase, _, cx| {
+                    if phase != DispatchPhase::Capture || event.button != MouseButton::Left {
+                        return;
+                    }
+                    view.update(cx, |this, cx| {
+                        // A lifted row's release is its drop, not a click.
+                        let rows = rows.as_ref().map(|(rows, _)| rows);
+                        if this.release_folder_drag(rows, cx) {
+                            cx.stop_propagation();
+                        }
+                    });
+                });
+            },
+        )
+        .absolute()
+        .size_full()
+    }
+
     fn folder_row(
         &self,
         look: &Look,
         card: &Card,
         open: bool,
+        carried: bool,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let theme = look.theme;
         let selector = format!("folder-{}-{}", card.endpoint, card.workspace);
         let bar = format!("folder-bar-{}-{}", card.endpoint, card.workspace);
         let clicked = card.clone();
-        let needs = card.rank() == Rank::NeedsYou;
+        let pressed = card.clone();
+        let waiting = card.waiting();
         div()
             .id(SharedString::from(selector.clone()))
             .debug_selector(move || selector.clone())
@@ -210,9 +268,20 @@ impl HerdrWindow {
                     theme.active
                 }))
             })
-            .when(!open, |row| {
+            .when(!open && !carried, |row| {
                 row.hover(|style| style.bg(rgb(mix(theme.surface, theme.foreground, 4))))
             })
+            .when(carried, |row| {
+                row.cursor_grabbing().bg(rgb(theme.active)).shadow_lg()
+            })
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, event: &MouseDownEvent, _, cx| {
+                    if event.click_count == 1 {
+                        this.press_folder(&pressed, event.position, cx);
+                    }
+                }),
+            )
             // The open folder's row is its Home; another folder opens at
             // the part it was left on.
             .on_click(cx.listener(move |this, _, window, cx| {
@@ -239,7 +308,9 @@ impl HerdrWindow {
             .when_some(card.dirty.filter(|dirty| dirty.files > 0), |row, dirty| {
                 row.child(
                     bubble(look, look.status(AgentStatus::Blocked), dirty.files)
-                        .when(!needs, |bubble| bubble.bg(rgb(theme.ink(theme.palette[3])))),
+                        .when(!waiting, |bubble| {
+                            bubble.bg(rgb(theme.ink(theme.palette[3])))
+                        }),
                 )
             })
             .when_some(card.agent.as_ref(), |row, agent| {

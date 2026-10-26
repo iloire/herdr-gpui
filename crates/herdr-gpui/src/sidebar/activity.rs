@@ -376,6 +376,13 @@ impl HerdrWindow {
                 .min_w_0()
                 .min_h_0()
                 .when_some(focus, |section, focus| section.track_focus(&focus))
+                // The keyboard rests here on a section's page, so a lifted
+                // folder drops back on Escape here too.
+                .on_key_down(cx.listener(|this, event: &KeyDownEvent, _, cx| {
+                    if event.keystroke.key == "escape" && this.cancel_folder_drag(cx) {
+                        cx.stop_propagation();
+                    }
+                }))
                 .child(section)
                 .into_any_element(),
         )

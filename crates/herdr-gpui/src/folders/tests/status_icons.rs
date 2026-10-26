@@ -1,7 +1,7 @@
 //! A folder's agent shows the status mark Spaces shows, in the configured
 //! icon set, centered on its row.
 
-use super::page::{bounds, draw, endpoint, fixture};
+use super::page::{bounds, click, draw, endpoint, fixture};
 use crate::config::StatusIcons;
 use herdr_client::protocol::AgentStatus;
 
@@ -18,6 +18,9 @@ fn working_selector(icons: StatusIcons) -> Option<&'static str> {
 fn a_working_folder_shows_the_sidebars_mark(cx: &mut gpui::TestAppContext) {
     let (view, cx) = fixture(cx);
     let host = endpoint(&view, cx);
+    // Open the other folder, so the working one's Home, which shows the
+    // same mark, is not drawn.
+    click(cx, &format!("folder-{host}-w1"));
     let mut drawn = 0;
     for &icons in StatusIcons::ALL {
         let Some(selector) = working_selector(icons) else {

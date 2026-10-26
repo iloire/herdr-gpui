@@ -65,18 +65,16 @@ pub(super) fn endpoint(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) -
 }
 
 #[gpui::test]
-fn every_workspace_is_listed_and_the_waiting_one_leads_unfolded(cx: &mut gpui::TestAppContext) {
+fn every_workspace_is_listed_in_sidebar_order_and_the_first_unfolds(cx: &mut gpui::TestAppContext) {
     let (view, cx) = fixture(cx);
     let host = endpoint(&view, cx);
+    let first = bounds(cx, &format!("folder-{host}-w0")).expect("first row");
+    // w1 waits on the user, which no longer moves it up.
     let waiting = bounds(cx, &format!("folder-{host}-w1")).expect("waiting row");
-    let working = bounds(cx, &format!("folder-{host}-w0")).expect("working row");
-    assert!(
-        waiting.origin.y < working.origin.y,
-        "{waiting:?} {working:?}"
-    );
+    assert!(first.origin.y < waiting.origin.y, "{first:?} {waiting:?}");
     // The first folder is unfolded, its parts under its row, its Home shown.
     let parts = bounds(cx, "folder-part-terminals").expect("parts");
-    assert!(parts.origin.y > waiting.origin.y && parts.origin.y < working.origin.y);
+    assert!(parts.origin.y > first.origin.y && parts.origin.y < waiting.origin.y);
     assert!(
         bounds(cx, "folder-part-home").is_none(),
         "its row is its Home"
@@ -107,17 +105,6 @@ fn the_changes_part_fills_the_body_and_home_comes_back(cx: &mut gpui::TestAppCon
     assert!(bounds(cx, "folder-changes").is_some());
     assert!(bounds(cx, "folder-home").is_none());
     // The open folder's own row brings its Home back.
-    click(cx, &format!("folder-{host}-w1"));
+    click(cx, &format!("folder-{host}-w0"));
     assert!(bounds(cx, "folder-home").is_some());
-}
-
-#[gpui::test]
-fn needs_me_keeps_only_folders_waiting_on_the_user(cx: &mut gpui::TestAppContext) {
-    let (view, cx) = fixture(cx);
-    let host = endpoint(&view, cx);
-    click(cx, "folders-needs-me");
-    assert!(bounds(cx, &format!("folder-{host}-w1")).is_some());
-    assert!(bounds(cx, &format!("folder-{host}-w0")).is_none());
-    click(cx, "folders-all");
-    assert!(bounds(cx, &format!("folder-{host}-w0")).is_some());
 }
