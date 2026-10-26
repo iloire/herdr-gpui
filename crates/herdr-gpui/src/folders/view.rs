@@ -153,10 +153,16 @@ impl HerdrWindow {
     }
 }
 
+/// The color that tells a folder apart: its mark and its row's edge bar.
+pub(super) fn folder_color(look: &Look, name: &str) -> u32 {
+    let theme = look.theme;
+    theme.ink(theme.palette[model::hue(name)])
+}
+
 /// A folder's mark: its monogram on a wash of its own hue.
 pub(super) fn mark(look: &Look, name: &str, side: f32) -> Div {
     let theme = look.theme;
-    let color = theme.ink(theme.palette[model::hue(name)]);
+    let color = folder_color(look, name);
     div()
         .flex_none()
         .size(px(side))

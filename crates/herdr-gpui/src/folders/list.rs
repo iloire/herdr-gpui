@@ -6,7 +6,7 @@
 use super::{
     Part,
     model::{Card, Rank},
-    view::{bubble, host_chip},
+    view::{bubble, folder_color, host_chip},
 };
 use crate::{
     HerdrWindow,
@@ -176,11 +176,13 @@ impl HerdrWindow {
     ) -> Stateful<Div> {
         let theme = look.theme;
         let selector = format!("folder-{}-{}", card.endpoint, card.workspace);
+        let bar = format!("folder-bar-{}-{}", card.endpoint, card.workspace);
         let clicked = card.clone();
         let needs = card.rank() == Rank::NeedsYou;
         div()
             .id(SharedString::from(selector.clone()))
             .debug_selector(move || selector.clone())
+            .relative()
             .flex()
             .items_center()
             .gap_2()
@@ -188,6 +190,19 @@ impl HerdrWindow {
             .py_1p5()
             .rounded(px(corners::CONTROL))
             .cursor_pointer()
+            // The folder's own color down its left edge, as its Home's mark,
+            // so folders tell apart at a glance without taking width.
+            .child(
+                div()
+                    .debug_selector(move || bar.clone())
+                    .absolute()
+                    .left_0()
+                    .top(px(8.))
+                    .bottom(px(8.))
+                    .w(px(3.))
+                    .rounded_full()
+                    .bg(rgb(folder_color(look, &card.name))),
+            )
             .when(open, |row| {
                 row.bg(rgb(if self.folders.part == Part::Home {
                     theme.primary_wash()

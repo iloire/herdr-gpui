@@ -247,9 +247,16 @@ pub(crate) fn monogram(name: &str) -> String {
 /// The palette slot, red to cyan, a folder's mark is drawn in: the same for
 /// a name on every launch and every host.
 pub(crate) fn hue(name: &str) -> usize {
-    // FNV-1a: stable across runs, unlike the standard hasher.
-    let hash = name.bytes().fold(0x811c_9dc5_u32, |hash, byte| {
+    // FNV-1a: stable across runs, unlike the standard hasher. Its low bits
+    // barely mix, so the remainder alone put most names on two slots;
+    // Murmur3's finalizer spreads them first.
+    let mut hash = name.bytes().fold(0x811c_9dc5_u32, |hash, byte| {
         (hash ^ u32::from(byte)).wrapping_mul(0x0100_0193)
     });
+    hash ^= hash >> 16;
+    hash = hash.wrapping_mul(0x85eb_ca6b);
+    hash ^= hash >> 13;
+    hash = hash.wrapping_mul(0xc2b2_ae35);
+    hash ^= hash >> 16;
     1 + (hash % 6) as usize
 }
