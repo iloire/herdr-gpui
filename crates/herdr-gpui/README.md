@@ -2807,6 +2807,14 @@ tabs. Splitting opens nothing new and moves no tab.
   and the workspace's listening ports, each opening its page. `cmd-t` and
   `cmd-shift-b` open in the group in use, where Close Tab acts too. Close
   Tab in a group without tabs closes the group.
+- Set top-level `plus_command` to make **+** run a command instead:
+  `plus_command = "claude"` opens a terminal tab in the focused pane's folder
+  and types `claude` into its shell, and **+** shows the program's mark
+  (Claude's, Codex's, or a generic agent's for one Herdr does not know).
+  Hold Alt (Option on macOS) and **+** turns back into a plus; a click then
+  opens a plain terminal tab. `cmd-t` always opens a plain terminal tab. The
+  line is typed as written, so it can carry flags (`claude --continue`) and
+  runs on an SSH host as it would here.
 - Drag a divider to resize the groups beside it. Groups are the window's own,
   per workspace. A group's own connection closes with the group, or when the
   window leaves the workspace or host; returning reconnects it.

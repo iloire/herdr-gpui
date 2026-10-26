@@ -454,7 +454,7 @@ impl HerdrWindow {
         if self.cloud_setup.is_some() {
             return true;
         }
-        self.worktree_script.is_some() || self.chat_starting()
+        self.worktree_script.is_some() || self.chat_starting() || self.plus_command_starting()
     }
 
     /// Whether the trust question has been up long enough for a click on it

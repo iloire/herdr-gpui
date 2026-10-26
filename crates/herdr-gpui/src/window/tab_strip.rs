@@ -4,6 +4,7 @@
 
 mod dividers;
 mod launcher;
+mod plus;
 
 use super::{HerdrWindow, tab_drag::StripDrag};
 #[cfg(test)]
@@ -11,7 +12,6 @@ use crate::tab_layout::{DOT_GAP, ZOOM_ICON};
 use crate::{
     TAB_HEIGHT,
     browser::{Fold, GroupId, Leaving, Listed, Pick, Shown, Slot, ThumbDrag},
-    controls::Command,
     fonts::StyledFont,
     herdr_settings::TabBarPosition,
     icons::AgentIcon,
@@ -389,28 +389,16 @@ impl HerdrWindow {
                         .id(SharedString::from(slot.selector("new-tab")))
                         .debug_selector(move || slot.selector("new-tab"))
                         .role(Role::Button)
-                        .aria_label("New tab")
+                        .aria_label(self.plus_label())
                         .map(|control| {
                             self.chrome_stop(crate::window::chrome_focus::Region::TitleBar, control)
                         })
-                        .map(|button| {
-                            layout.new_tab(
-                                button,
-                                svg()
-                                    .path("icons/plus.svg")
-                                    .debug_selector(move || slot.selector("new-tab-icon"))
-                                    .size(px(14.))
-                                    // Quiet like the unselected tabs beside it.
-                                    .text_color(rgb(self.theme.muted))
-                                    .into_any_element(),
-                                &self.theme,
-                            )
-                        })
+                        .map(|button| layout.new_tab(button, self.plus_icon(slot), &self.theme))
+                        .map(|button| self.plus_tooltip(button))
                         // A new Herdr tab opens in the group that asked for it;
                         // other kinds of tab are behind "…".
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.expect_new_tab_in(slot.id);
-                            this.command(Command::Tab, window, cx);
+                        .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
+                            this.click_plus(slot.id, event.modifiers().alt, window, cx);
                         })),
                     window,
                     cx,

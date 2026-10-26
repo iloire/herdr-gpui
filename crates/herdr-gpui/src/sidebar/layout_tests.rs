@@ -657,6 +657,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         arrival: None,
         strip_navigation_fits: true,
         pending_toast: None,
+        plus_tab: Default::default(),
         toasts_hidden: false,
         pending_releases: Vec::new(),
         selected_generation: 0,

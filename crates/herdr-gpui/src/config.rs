@@ -230,6 +230,9 @@ pub struct Config {
     /// The `[pane_keys]` table `keybindings` was built from, for the same
     /// reason.
     pub(crate) pane_keys: PaneKeys,
+    /// What a click on a tab strip's "+" types into the tab it opens; none
+    /// opens a plain terminal tab.
+    pub(crate) plus_command: Option<crate::plus_command::PlusCommand>,
     pub(crate) px0: crate::px0::Config,
     /// Remote control from a phone, through the `herdr-remote-control` daemon.
     pub remote: RemoteConfig,
@@ -428,6 +431,7 @@ impl Default for Config {
             option_as_alt: OptionAsAlt::default(),
             palette: crate::palette::PaletteConfig::default(),
             pane_keys: PaneKeys::new(),
+            plus_command: None,
             px0: crate::px0::Config::default(),
             remote: RemoteConfig::default(),
             remove_merged_worktrees: false,
@@ -508,6 +512,7 @@ struct Settings {
     option_as_alt: OptionAsAlt,
     palette: crate::palette::PaletteConfig,
     pane_keys: PaneKeys,
+    plus_command: Option<crate::plus_command::PlusCommand>,
     px0: crate::px0::Config,
     remote: RemoteConfig,
     remove_merged_worktrees: Option<bool>,
@@ -893,6 +898,7 @@ impl Config {
         config.remote = settings.remote;
         config.open_files_in = settings.open_files_in;
         config.editor_command = settings.editor_command;
+        config.plus_command = settings.plus_command;
         config.keep_selection_after_copy = settings.keep_selection_after_copy.unwrap_or(true);
         for (name, font, settings) in [
             ("sidebar", &mut config.sidebar, settings.sidebar.font),

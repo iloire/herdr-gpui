@@ -159,6 +159,11 @@ open_files_in = "editor"
 # How that editor starts. Unset, the pane's $VISUAL or $EDITOR runs, then vi,
 # as `$EDITOR +LINE FILE`. `{file}` and `{line}` place the two yourself:
 # editor_command = "hx {file}:{line}"
+# What a click on a tab strip's "+" types into the terminal tab it opens, in
+# the focused pane's folder; "+" then shows the program's mark. Hold Alt
+# (Option on macOS) as you click for a plain terminal tab; the new-tab
+# shortcut always opens one. Unset, "+" opens a plain terminal tab:
+# plus_command = "claude"
 # Keep a terminal selection highlighted after releasing the mouse copies it,
 # until the next click or keystroke. Cmd-C and Edit > Copy copy it again, and
 # selection tools and screen readers can still read it. false clears it on

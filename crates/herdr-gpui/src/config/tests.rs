@@ -36,6 +36,7 @@ mod loading;
 mod missing_fonts;
 mod notification_settings;
 mod omarchy_theme;
+mod plus_command;
 mod preferences;
 mod px0;
 mod remote;

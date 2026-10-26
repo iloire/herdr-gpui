@@ -286,6 +286,8 @@ pub(crate) struct HerdrWindow {
     pub(crate) pending_releases: Vec<endpoint::Release>,
     pub(crate) pending_resize: Option<(ConnectOptions, std::time::Instant)>,
     pub(crate) pending_toast: Option<u64>,
+    /// What the tab strips' "+" runs and whether Alt turns it back.
+    pub(crate) plus_tab: crate::plus_command::PlusTab,
     /// Remote ports forwarded to this machine; they end with the window.
     pub(crate) port_forwards: crate::port_forward::PortForwards,
     /// Comment, merge, and review reads for the focused branch's open PR.
@@ -659,6 +661,7 @@ impl HerdrWindow {
             self.poll_cloud_setup_tab(cx);
         }
         self.poll_editor_open(cx);
+        self.poll_plus_command(cx);
         self.poll_worktree_source(cx);
         self.poll_hover_menu(std::time::Instant::now(), window, cx);
         if self.tick_flash(std::time::Instant::now()) {
