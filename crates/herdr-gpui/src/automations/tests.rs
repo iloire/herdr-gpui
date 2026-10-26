@@ -12,6 +12,7 @@ use std::{sync::Arc, time::SystemTime};
 mod autostart;
 mod notify;
 mod parse;
+mod resize;
 mod review;
 mod rows;
 mod section;

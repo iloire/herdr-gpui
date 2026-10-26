@@ -2,9 +2,10 @@
 //! them and gives the terminals the room they leave; a double-click goes
 //! back to the default.
 use super::page::{bounds, click, draw, fixture};
+use crate::sidebar::ActivityPanel;
 use gpui::{Modifiers, MouseButton, Pixels, VisualTestContext, point, px};
 
-fn drag(cx: &mut VisualTestContext, handle: &str, by: Pixels) {
+pub(crate) fn drag(cx: &mut VisualTestContext, handle: &str, by: Pixels) {
     let start = bounds(cx, handle).unwrap().center();
     let to = point(start.x + by, start.y);
     cx.simulate_mouse_down(start, MouseButton::Left, Modifiers::default());
@@ -33,16 +34,16 @@ fn the_list_and_tree_resize_and_the_terminals_take_the_room(cx: &mut gpui::TestA
     click(cx, "folder-part-files");
     assert!((width(cx, "folders-list") - px(210.)).abs() <= px(4.));
     let terminal = bounds(cx, "terminal").unwrap().left();
-    drag(cx, "folders-tree-resize", px(-100.));
-    assert!((width(cx, "files") - px(180.)).abs() <= px(4.));
+    drag(cx, "folders-tree-resize", px(-60.));
+    assert!((width(cx, "files") - px(200.)).abs() <= px(4.));
     let wider = bounds(cx, "terminal").unwrap().left();
     assert!(
-        (terminal - wider - px(100.)).abs() <= px(6.),
+        (terminal - wider - px(60.)).abs() <= px(6.),
         "the terminals take the room: {terminal:?} {wider:?}"
     );
     view.update(cx, |view, _| {
         assert!(view.folders.list_width.chosen().is_some());
-        assert!(view.folders.tree_width.chosen().is_some());
+        assert!(view.files_tree_width.chosen().is_some());
         assert!(!view.folders.list_width.take_unsaved(), "saved on release");
     });
     // A double-click on the list's edge goes back to the default.
@@ -57,4 +58,49 @@ fn the_list_and_tree_resize_and_the_terminals_take_the_room(cx: &mut gpui::TestA
     cx.simulate_mouse_up(edge, MouseButton::Left, Modifiers::default());
     draw(cx);
     assert_eq!(width(cx, "folders-list"), px(290.));
+}
+
+#[gpui::test]
+fn the_files_view_tree_resizes_with_the_same_width(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = fixture(cx);
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.show_activity_panel(ActivityPanel::Files, window, cx)
+        })
+    });
+    draw(cx);
+    assert_eq!(width(cx, "files"), px(260.));
+    let terminal = bounds(cx, "terminal").unwrap().left();
+    drag(cx, "files-resize", px(80.));
+    assert!((width(cx, "files") - px(340.)).abs() <= px(4.));
+    let narrower = bounds(cx, "terminal").unwrap().left();
+    assert!(
+        (narrower - terminal - px(80.)).abs() <= px(6.),
+        "{terminal:?} {narrower:?}"
+    );
+    // A folder's Files shows the tree at the width dragged here.
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.show_activity_panel(ActivityPanel::Folders, window, cx)
+        })
+    });
+    draw(cx);
+    click(cx, "folder-part-files");
+    assert!((width(cx, "files") - px(340.)).abs() <= px(4.));
+}
+
+#[gpui::test]
+fn the_changes_part_list_resizes(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = fixture(cx);
+    click(cx, "folder-part-changes");
+    let before = width(cx, "folder-changes-panel");
+    drag(cx, "folder-changes-resize", px(-100.));
+    let after = width(cx, "folder-changes-panel");
+    assert!(
+        (before - after - px(100.)).abs() <= px(4.),
+        "{before:?} {after:?}"
+    );
+    view.update(cx, |view, _| {
+        assert!(view.changes_list_width.chosen().is_some())
+    });
 }

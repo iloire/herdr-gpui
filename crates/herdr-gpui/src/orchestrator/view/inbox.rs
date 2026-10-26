@@ -162,12 +162,10 @@ impl OrchestratorView {
             .iter()
             .filter(|item| !item.blocked_by.is_empty() || item.state == "blocked")
             .count();
-        div()
+        let facets = div()
             .id("orchestrator-facets")
             .debug_selector(|| "orchestrator-facets".into())
-            .flex_none()
-            .w(px(FACETS_WIDTH))
-            .h_full()
+            .size_full()
             .overflow_y_scroll()
             .px_3()
             .py_2()
@@ -220,7 +218,42 @@ impl OrchestratorView {
                             cx.notify();
                         }))
                     }))
-            })
+            });
+        self.resizable_facets(facets, cx)
+    }
+
+    /// The filters' column, resizable by its edge facing the list; its
+    /// width lasts while the view does.
+    fn resizable_facets(&self, facets: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
+        use crate::panel_resize::{PanelDrag, Side, handle};
+        div()
+            .id("orchestrator-facets-panel")
+            .relative()
+            .flex_none()
+            .h_full()
+            .min_h_0()
+            .w(px(self.facets_width.width(0.)))
+            .on_drag_move(
+                cx.listener(|this, event: &DragMoveEvent<PanelDrag>, _, cx| {
+                    if *event.drag(cx) == PanelDrag::IssueFilters
+                        && this
+                            .facets_width
+                            .drag(Side::Left, event.bounds, event.event.position.x)
+                    {
+                        cx.notify();
+                    }
+                }),
+            )
+            .child(facets)
+            .child(handle(
+                "orchestrator-facets-resize",
+                Side::Left,
+                PanelDrag::IssueFilters,
+                cx.listener(|this, _, _, cx| {
+                    this.facets_width.reset();
+                    cx.notify();
+                }),
+            ))
     }
 
     /// While the Issues filters are folded, the ones in use as chips that
@@ -672,8 +705,7 @@ impl OrchestratorView {
     }
 }
 
-/// The filters' column width, and the most labels it offers.
-const FACETS_WIDTH: f32 = 200.;
+/// The most labels the filters' column offers.
 /// One turn of the busy Refresh icon.
 const SPIN: std::time::Duration = std::time::Duration::from_millis(900);
 const FACET_LABELS: usize = 12;

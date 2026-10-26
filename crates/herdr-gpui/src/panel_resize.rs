@@ -38,8 +38,12 @@ pub(crate) enum PanelDrag {
     DiffSides,
     /// The Folders list.
     FoldersList,
-    /// A folder's file tree, beside the Folders list.
-    FoldersTree,
+    /// The Files tree, in the Files view or beside the Folders list.
+    FilesTree,
+    /// The Automations list, beside an open script or run.
+    AutomationsList,
+    /// The Issues filters' column, which its own view resizes.
+    IssueFilters,
     /// The review's list of changed files.
     ReviewFiles,
 }
@@ -50,8 +54,12 @@ pub(crate) const NOTES: PanelWidth = PanelWidth::new(300., 220.);
 pub(crate) const CHANGES_LIST: PanelWidth = PanelWidth::new(420., 260.);
 /// The Folders list, as a page or beside the terminals.
 pub(crate) const FOLDERS_LIST: PanelWidth = PanelWidth::new(290., 180.);
-/// A folder's file tree, beside the Folders list.
-pub(crate) const FOLDERS_TREE: PanelWidth = PanelWidth::new(280., 160.);
+/// The Files tree, in the Files view or beside the Folders list.
+pub(crate) const FILES_TREE: PanelWidth = PanelWidth::new(260., 160.);
+/// The Issues filters' column.
+pub(crate) const ISSUE_FILTERS: PanelWidth = PanelWidth::new(200., 150.);
+/// The Automations list, beside an open script or run.
+pub(crate) const AUTOMATIONS_LIST: PanelWidth = PanelWidth::new(280., 180.);
 /// The review's list of changed files.
 pub(crate) const REVIEW_FILES: PanelWidth = PanelWidth::new(240., 160.);
 /// The settings window's section list.
@@ -199,12 +207,13 @@ impl crate::HerdrWindow {
         match drag {
             PanelDrag::ChangesList => Some((&mut self.changes_list_width, Side::Left)),
             PanelDrag::FoldersList => Some((&mut self.folders.list_width, Side::Left)),
-            PanelDrag::FoldersTree => Some((&mut self.folders.tree_width, Side::Left)),
+            PanelDrag::FilesTree => Some((&mut self.files_tree_width, Side::Left)),
+            PanelDrag::AutomationsList => Some((&mut self.automations_list_width, Side::Left)),
             PanelDrag::ReviewNotes => Some((&mut self.notes_width, Side::Right)),
             #[cfg(any(target_os = "macos", windows))]
             PanelDrag::PageNotes => Some((&mut self.notes_width, Side::Right)),
             PanelDrag::ReviewFiles => Some((&mut self.review_files_width, Side::Left)),
-            PanelDrag::SettingsNavigation | PanelDrag::DiffSides => None,
+            PanelDrag::SettingsNavigation | PanelDrag::DiffSides | PanelDrag::IssueFilters => None,
         }
     }
 
@@ -213,12 +222,13 @@ impl crate::HerdrWindow {
         match drag {
             PanelDrag::ChangesList => Some((self.changes_list_width, Side::Left)),
             PanelDrag::FoldersList => Some((self.folders.list_width, Side::Left)),
-            PanelDrag::FoldersTree => Some((self.folders.tree_width, Side::Left)),
+            PanelDrag::FilesTree => Some((self.files_tree_width, Side::Left)),
+            PanelDrag::AutomationsList => Some((self.automations_list_width, Side::Left)),
             PanelDrag::ReviewNotes => Some((self.notes_width, Side::Right)),
             #[cfg(any(target_os = "macos", windows))]
             PanelDrag::PageNotes => Some((self.notes_width, Side::Right)),
             PanelDrag::ReviewFiles => Some((self.review_files_width, Side::Left)),
-            PanelDrag::SettingsNavigation | PanelDrag::DiffSides => None,
+            PanelDrag::SettingsNavigation | PanelDrag::DiffSides | PanelDrag::IssueFilters => None,
         }
     }
 

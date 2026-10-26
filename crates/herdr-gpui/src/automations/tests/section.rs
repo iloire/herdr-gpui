@@ -27,7 +27,7 @@ pub(super) fn draw(cx: &mut VisualTestContext) {
     });
 }
 
-fn click(cx: &mut VisualTestContext, selector: &'static str) {
+pub(super) fn click(cx: &mut VisualTestContext, selector: &'static str) {
     let bounds = cx
         .debug_bounds(selector)
         .unwrap_or_else(|| panic!("no {selector}"));
@@ -37,7 +37,9 @@ fn click(cx: &mut VisualTestContext, selector: &'static str) {
 
 /// Shows the section with two machines read: one with scripts, one
 /// without the program.
-fn shown(cx: &mut gpui::TestAppContext) -> (Entity<HerdrWindow>, &mut VisualTestContext) {
+pub(super) fn shown(
+    cx: &mut gpui::TestAppContext,
+) -> (Entity<HerdrWindow>, &mut VisualTestContext) {
     let (view, cx) = window(cx);
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {

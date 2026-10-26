@@ -166,6 +166,8 @@ pub(crate) struct OrchestratorView {
     selected: Option<String>,
     detail: Option<Detail>,
     pane_width: f32,
+    /// The Issues filters' column, as dragged.
+    facets_width: crate::panel_resize::PanelWidth,
     focus: FocusHandle,
     scroll: UniformListScrollHandle,
     /// The shown list's lines: headings and rows.
@@ -247,6 +249,7 @@ impl OrchestratorView {
             selected: None,
             detail: None,
             pane_width: PANE_DEFAULT,
+            facets_width: crate::panel_resize::ISSUE_FILTERS,
             focus: cx.focus_handle(),
             scroll: UniformListScrollHandle::new(),
             lines: Vec::new(),

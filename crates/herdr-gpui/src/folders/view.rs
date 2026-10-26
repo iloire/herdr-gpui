@@ -15,9 +15,6 @@ use crate::{
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
 
-/// The Changes part's list of files and commits, beside the review.
-const CHANGES_LIST: f32 = 380.;
-
 impl HerdrWindow {
     /// The page across the window's body.
     pub(crate) fn render_folders(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -119,13 +116,25 @@ impl HerdrWindow {
                     .flex_1()
                     .min_h_0()
                     .child(
-                        div()
-                            .id("folder-changes-list")
-                            .w(px(CHANGES_LIST))
-                            .flex_none()
-                            .overflow_y_scroll()
-                            .p_3()
-                            .child(list),
+                        self.resizable_panel(
+                            div()
+                                .id("folder-changes-panel")
+                                .debug_selector(|| "folder-changes-panel".into())
+                                .flex_none()
+                                .min_h_0()
+                                .child(
+                                    div()
+                                        .id("folder-changes-list")
+                                        .size_full()
+                                        .overflow_y_scroll()
+                                        .p_3()
+                                        .child(list),
+                                ),
+                            "folder-changes-resize",
+                            crate::panel_resize::PanelDrag::ChangesList,
+                            None,
+                            cx,
+                        ),
                     )
                     .child(
                         div()

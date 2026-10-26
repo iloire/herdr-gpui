@@ -686,6 +686,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         scrollbar_drag: None,
         security: Default::default(),
         automations: Default::default(),
+        automations_list_width: crate::panel_resize::AUTOMATIONS_LIST,
         security_search: crate::security::SecuritySearch::new(cx),
         split_drag: None,
         split_cursor: None,
@@ -697,6 +698,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         key_layout: |_| None,
         file_transfer: None,
         files: Default::default(),
+        files_tree_width: crate::panel_resize::FILES_TREE,
         folders: Default::default(),
         presentation: Default::default(),
         wake: crate::endpoint::WakeClock::new(

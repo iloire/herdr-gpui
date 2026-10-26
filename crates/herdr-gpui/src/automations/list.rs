@@ -5,9 +5,6 @@ use super::{HostState, Opened, Read, model};
 use crate::HerdrWindow;
 use gpui::{prelude::*, *};
 
-/// The list's width beside a page.
-const WIDTH: f32 = 280.;
-
 impl HerdrWindow {
     pub(super) fn render_automation_list(
         &self,
@@ -18,17 +15,12 @@ impl HerdrWindow {
         let mut list = div()
             .id("automations-list")
             .debug_selector(|| "automations-list".into())
-            .flex_none()
-            .w(px(WIDTH))
-            .h_full()
-            .min_h_0()
+            .size_full()
             .overflow_y_scroll()
             .track_scroll(&self.automations.scroll)
             .flex()
             .flex_col()
-            .pb_3()
-            .border_r_1()
-            .border_color(rgb(theme.active));
+            .pb_3();
         for host in &self.automations.hosts {
             list = list.child(self.automation_list_host(host));
             let Some(status) = host.status() else {
@@ -100,7 +92,20 @@ impl HerdrWindow {
                 );
             }
         }
-        list
+        self.resizable_panel(
+            div()
+                .id("automations-list-panel")
+                .flex_none()
+                .h_full()
+                .min_h_0()
+                .border_r_1()
+                .border_color(rgb(theme.active))
+                .child(list),
+            "automations-list-resize",
+            crate::panel_resize::PanelDrag::AutomationsList,
+            None,
+            cx,
+        )
     }
 
     fn automation_list_host(&self, host: &HostState) -> Div {

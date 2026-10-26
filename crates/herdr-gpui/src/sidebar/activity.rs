@@ -18,6 +18,7 @@
 
 use super::{SidebarMode, agents::Indicators, line_height};
 use crate::fonts::StyledFont;
+use crate::panel_resize::PanelDrag;
 use crate::{
     Command, HerdrWindow,
     orchestrator::{List, OrchestratorView, ViewId},
@@ -299,7 +300,11 @@ impl HerdrWindow {
         if self.folders_column() {
             return Some(BAR_WIDTH + self.folders_column_width());
         }
-        let width = self.sidebar_mode().width(self.sidebar_width, window_width);
+        let width = if self.files_shown() {
+            Some(self.files_tree_width.width(self.viewport_width))
+        } else {
+            self.sidebar_mode().width(self.sidebar_width, window_width)
+        };
         if !self.activity_bar_leads() {
             return width;
         }
@@ -425,13 +430,17 @@ impl HerdrWindow {
         }
         let files = self.activity_panel() == ActivityPanel::Files;
         let sidebar = match self.sidebar_mode() {
-            SidebarMode::Expanded if files => {
-                let width = super::metrics::sidebar_width(
-                    self.sidebar_width,
-                    f32::from(window.viewport_size().width),
-                );
-                self.render_files(width, line_height(&self.config.sidebar) + 4., cx)
-            }
+            SidebarMode::Expanded if files => self.resizable_panel(
+                self.render_files(
+                    self.files_tree_width.width(self.viewport_width),
+                    line_height(&self.config.sidebar) + 4.,
+                    cx,
+                ),
+                "files-resize",
+                PanelDrag::FilesTree,
+                None,
+                cx,
+            ),
             SidebarMode::Expanded => self.render_sidebar(indicators, window, cx),
             // A window too narrow for the rail keeps the bar alone, which
             // still brings the sidebar back.

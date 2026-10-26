@@ -131,9 +131,11 @@ pub struct Chrome {
     pub notes_width: Option<f32>,
     /// The review's file list's width, once dragged.
     pub review_files_width: Option<f32>,
-    /// The Folders list's width, and its file tree's, once dragged.
+    /// The Folders list's, the Files tree's, and the Automations list's
+    /// widths, once dragged.
     pub folders_list_width: Option<f32>,
-    pub folders_tree_width: Option<f32>,
+    pub files_tree_width: Option<f32>,
+    pub automations_list_width: Option<f32>,
     /// The device IDs in the order the user dragged them into.
     pub device_order: Vec<String>,
 }
@@ -300,7 +302,8 @@ fn read_chrome(path: &Path) -> crate::Result<Chrome> {
         notes_width: panel_width("notes_width_px"),
         review_files_width: panel_width("review_files_width_px"),
         folders_list_width: panel_width("folders_list_width_px"),
-        folders_tree_width: panel_width("folders_tree_width_px"),
+        files_tree_width: panel_width("files_tree_width_px"),
+        automations_list_width: panel_width("automations_list_width_px"),
         device_order: device_order(object.get("device_order")),
     })
 }
@@ -390,8 +393,11 @@ fn write_chrome(path: &Path, chrome: Chrome) -> crate::Result<()> {
                 "folders_list_width_px": chrome
                     .folders_list_width
                     .filter(|width| width.is_finite() && *width > 0.0),
-                "folders_tree_width_px": chrome
-                    .folders_tree_width
+                "files_tree_width_px": chrome
+                    .files_tree_width
+                    .filter(|width| width.is_finite() && *width > 0.0),
+                "automations_list_width_px": chrome
+                    .automations_list_width
                     .filter(|width| width.is_finite() && *width > 0.0),
                 "device_order": chrome.device_order,
             }),

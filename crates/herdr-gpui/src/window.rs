@@ -127,6 +127,8 @@ pub(crate) struct HerdrWindow {
     /// The activity bar's Automations section: every host's
     /// `herdr-automate` scripts and runs.
     pub(crate) automations: crate::automations::Automations,
+    /// The Automations list beside an open script or run.
+    pub(crate) automations_list_width: crate::panel_resize::PanelWidth,
     pub(crate) avatars: Option<avatars::Avatars>,
     /// The picture and platform appearance `[backdrop]` asks for.
     pub(crate) backdrop: backdrop::State,
@@ -201,6 +203,8 @@ pub(crate) struct HerdrWindow {
     /// The activity bar's Files section: the focused pane's checkout as a
     /// tree beside the terminals.
     pub(crate) files: crate::files::Files,
+    /// The Files tree, in the Files view or beside the Folders list.
+    pub(crate) files_tree_width: crate::panel_resize::PanelWidth,
     /// The find bar, over the pane it searches.
     pub(crate) find: Option<find::FindBar>,
     /// How the find bar was left over each pane, to bring it back there.
@@ -516,8 +520,12 @@ impl HerdrWindow {
         if self.folders.list_width.chosen().is_none() {
             self.folders.list_width.restore(chrome.folders_list_width);
         }
-        if self.folders.tree_width.chosen().is_none() {
-            self.folders.tree_width.restore(chrome.folders_tree_width);
+        if self.files_tree_width.chosen().is_none() {
+            self.files_tree_width.restore(chrome.files_tree_width);
+        }
+        if self.automations_list_width.chosen().is_none() {
+            self.automations_list_width
+                .restore(chrome.automations_list_width);
         }
         // A device dragged before the stored order loaded keeps its place.
         if self.device_order.is_empty() {

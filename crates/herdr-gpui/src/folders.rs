@@ -62,9 +62,8 @@ pub(crate) struct Page {
     pub(crate) part: Part,
     /// The part each folder was last left on.
     parts: HashMap<Key, Part>,
-    /// The list's width, and the file tree's beside it, as dragged.
+    /// The list's width, as dragged.
     pub(crate) list_width: PanelWidth,
-    pub(crate) tree_width: PanelWidth,
     list_scroll: ScrollHandle,
     body_scroll: ScrollHandle,
 }
@@ -77,7 +76,6 @@ impl Default for Page {
             part: Part::Home,
             parts: HashMap::new(),
             list_width: crate::panel_resize::FOLDERS_LIST,
-            tree_width: crate::panel_resize::FOLDERS_TREE,
             list_scroll: ScrollHandle::new(),
             body_scroll: ScrollHandle::new(),
         }

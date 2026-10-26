@@ -24,7 +24,7 @@ impl HerdrWindow {
     /// each as dragged.
     pub(crate) fn folders_column_width(&self) -> f32 {
         let list = self.folders.list_width.width(self.viewport_width);
-        let tree = self.folders.tree_width.width(self.viewport_width);
+        let tree = self.files_tree_width.width(self.viewport_width);
         list + if self.folders_files() { tree } else { 0. }
     }
 
@@ -53,11 +53,11 @@ impl HerdrWindow {
             .min_h_0()
             .child(list)
             .when(files, |column| {
-                let tree = self.folders.tree_width.width(self.viewport_width);
+                let tree = self.files_tree_width.width(self.viewport_width);
                 column.child(self.resizable_panel(
                     self.render_files(tree, row_height, cx),
                     "folders-tree-resize",
-                    PanelDrag::FoldersTree,
+                    PanelDrag::FilesTree,
                     None,
                     cx,
                 ))
