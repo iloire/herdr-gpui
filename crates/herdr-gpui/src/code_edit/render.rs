@@ -95,6 +95,7 @@ impl CodeEditor {
             .h(height)
             .flex()
             .items_center()
+            .min_w_full()
             .whitespace_nowrap()
             .when(marks.current, |row| row.bg(current))
             .child(
