@@ -13,6 +13,7 @@
 //! Only this computer's checkouts are read: a pane on an SSH host has its
 //! files there, out of reach of a local listing.
 
+mod menu;
 mod render;
 mod tree;
 
@@ -21,6 +22,8 @@ mod tests;
 
 use crate::{HerdrWindow, code_index::Index};
 use gpui::{prelude::*, *};
+pub(crate) use menu::FilesMenu;
+pub(crate) use render::Opening;
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},

@@ -130,6 +130,7 @@ pub(crate) struct MenuState {
     pub(crate) tab: Option<crate::tab_menu::TabMenu>,
     pub(crate) group: Option<crate::group_menu::GroupMenu>,
     pub(crate) folder: Option<crate::folders::FolderMenu>,
+    pub(crate) files: Option<crate::files::FilesMenu>,
     pub(crate) host: Option<super::devices::HostMenu>,
     pub(crate) pane: Option<crate::pane_menu::PaneMenu>,
     /// The new worktree dialog's tabs and the GitHub listing behind them.
@@ -401,6 +402,7 @@ impl MenuState {
             tab: None,
             group: None,
             folder: None,
+            files: None,
             host: None,
             pane: None,
             worktree: None,
@@ -436,6 +438,7 @@ impl MenuState {
         self.tab = None;
         self.group = None;
         self.folder = None;
+        self.files = None;
         self.host = None;
         self.pane = None;
         self.github_selected = None;

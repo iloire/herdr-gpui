@@ -2274,7 +2274,12 @@ window at once, and `herdr-gpui ui panel NAME` shows a section.
   shows its Home, an overview. Home and Changes fill the
   window beside the list; Terminals shows the workspace's own terminals and
   tabs; Files shows its checkout as a tree beside the list, with only file
-  tabs in the window, and no terminal, until Terminals is picked again. Drag
+  tabs in the window, and no terminal, until Terminals is picked again.
+  Right-click a file in the tree to open it (a markdown file rendered or as
+  source), open it in the terminal editor, in its default app (a web page
+  in the browser), reveal it, or copy its full or relative path; right-click
+  a folder to open it as a new folder of its own, open it in the file
+  manager, or copy its paths. Drag
   the edge of the list, the tree, or the Changes list to resize it; a
   double-click goes back to the default width. The **+** at the right of
   the list's header (**Open project**) opens a project picker: the folders

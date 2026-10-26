@@ -45,6 +45,8 @@ pub(crate) enum Page {
     Dialog(WorkspaceAction),
     /// One prompt sent to several agents, and their comparison.
     FanOut,
+    /// A row's context menu in the Files tree.
+    Files,
     /// A folder row's context menu in the Folders list.
     Folder,
     /// Names a saved SSH device's port to forward to this computer.
@@ -171,6 +173,7 @@ impl Page {
                 | Self::PaneProcesses
                 | Self::KillProcesses
                 | Self::Host
+                | Self::Files
                 | Self::Folder
                 | Self::RemoveDevice
                 | Self::RemoveWsl

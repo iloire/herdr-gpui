@@ -3,7 +3,8 @@
 //! one height so the list draws only the rows in view, however large the
 //! checkout. A file opens in a code tab beside the terminals, a markdown
 //! file rendered (see `browser::markdown_toggle`), or with the secondary
-//! modifier in the terminal editor beside the focused pane.
+//! modifier in the terminal editor beside the focused pane. A right-click
+//! opens the row's menu (see `menu`).
 
 use super::{
     Status,
@@ -16,6 +17,17 @@ use std::ops::Range;
 
 /// How far each level of the tree steps in.
 const INDENT: f32 = 12.;
+
+/// Where a file from the tree opens.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Opening {
+    /// A code tab, or a markdown file rendered.
+    Tab,
+    /// A code tab, even for markdown.
+    Source,
+    /// The terminal editor beside the focused pane.
+    Editor,
+}
 
 impl HerdrWindow {
     /// The section's column, `width` wide with rows `row_height` tall.
@@ -173,15 +185,23 @@ impl HerdrWindow {
     ) -> Option<AnyElement> {
         let theme = &self.theme;
         let listing = self.files.listing.as_ref()?;
+        let Row { node: id, depth } = *self.files.rows.get(item)?;
+        let node = listing.tree.node(id)?;
+        let (menu, folder) = (node.path.clone(), matches!(node.entry, Entry::Folder(_)));
         let row = div()
             .id(("files-row", item))
             .h(px(row_height))
             .px_2()
             .flex()
             .items_center()
-            .gap(px(5.));
-        let Row { node: id, depth } = *self.files.rows.get(item)?;
-        let node = listing.tree.node(id)?;
+            .gap(px(5.))
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+                    cx.stop_propagation();
+                    this.open_files_menu(&menu, folder, event.position, window, cx);
+                }),
+            );
         let indent = f32::from(depth) * INDENT;
         Some(match node.entry {
             Entry::Folder(_) => {
@@ -278,7 +298,12 @@ impl HerdrWindow {
                     .text_color(rgb(theme.muted)),
             )
             .on_click(cx.listener(move |this, event: &ClickEvent, window, cx| {
-                this.open_files_entry(&opened, event.modifiers().secondary(), window, cx);
+                let opening = if event.modifiers().secondary() {
+                    Opening::Editor
+                } else {
+                    Opening::Tab
+                };
+                this.open_files_entry(&opened, opening, window, cx);
             }))
     }
 
@@ -313,12 +338,11 @@ impl HerdrWindow {
         }
     }
 
-    /// Opens `path`, relative to the shown checkout, in a code tab, or with
-    /// `in_editor` in the terminal editor beside the focused pane.
+    /// Opens `path`, relative to the shown checkout, as `opening` says.
     pub(crate) fn open_files_entry(
         &mut self,
         path: &str,
-        in_editor: bool,
+        opening: Opening,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -330,12 +354,12 @@ impl HerdrWindow {
             line: None,
         };
         self.files.selected = Some(path.to_owned());
-        if in_editor {
-            self.open_in_editor(&target, None, cx);
-        } else if crate::browser::renders_markdown(&target.path) {
-            self.open_markdown(&target.path, window, cx);
-        } else {
-            self.open_code_view(&target, window, cx);
+        match opening {
+            Opening::Editor => self.open_in_editor(&target, None, cx),
+            Opening::Tab if crate::browser::renders_markdown(&target.path) => {
+                self.open_markdown(&target.path, window, cx)
+            }
+            Opening::Tab | Opening::Source => self.open_code_view(&target, window, cx),
         }
         // Counted now, not at the next tick: until then the folder's Files
         // would leave the new tab out, and its group would forget it.

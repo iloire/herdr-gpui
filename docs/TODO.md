@@ -7,6 +7,13 @@ ships, strike it through, append ✅, and move it to **Done**.
 
 ## Done
 
+4. ~~**Files: right-click menu on a tree row.** A context menu on files and
+   folders in the Files tree, with actions that suit the entry's kind.~~ ✅
+   Files: Open (markdown rendered or as source), Open in Editor, Open with
+   Default App (Open in Browser for HTML), Reveal in Finder, Copy Path,
+   Copy Relative Path. Folders: Open as New Folder, Open in Finder, and
+   the two copies.
+
 3. ~~**Folders: a shorter folder row without its own branch line.** The
    branch line costs a row on every folder. The status bar shows only the
    focused tab's branch, so the list still needs it to tell worktrees of

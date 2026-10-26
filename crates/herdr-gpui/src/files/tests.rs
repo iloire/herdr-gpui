@@ -9,6 +9,7 @@ use std::{
 };
 
 mod follow;
+mod menu;
 mod tree;
 
 const FILES: &[&str] = &[

@@ -10,6 +10,7 @@ impl Page {
     pub(crate) fn accessible_role(self) -> Role {
         match self {
             Self::Application
+            | Self::Files
             | Self::Folder
             | Self::Git
             | Self::Group
@@ -58,6 +59,7 @@ impl Page {
                 WorkspaceAction::Note => "Worktree note",
             },
             Self::FanOut => "Fan out",
+            Self::Files => "File actions",
             Self::Folder => "Folder actions",
             Self::ForwardPort => "Forward port",
             Self::Git => "Git",

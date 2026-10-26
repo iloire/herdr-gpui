@@ -139,6 +139,10 @@ impl HerdrWindow {
             self.folder_menu_key(event, window, cx);
             return;
         }
+        if self.menu.page == Some(Page::Files) {
+            self.files_menu_key(event, window, cx);
+            return;
+        }
         if self.menu.page == Some(Page::Group) {
             self.group_menu_key(event, window, cx);
             return;
