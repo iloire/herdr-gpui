@@ -50,7 +50,7 @@ fn look(theme: &Theme, kind: Kind) -> (&'static str, Option<Rgba>, Option<Rgba>,
 
 /// A token's colour in this theme: the terminal palette's, made readable
 /// on the panel and its add and remove tints.
-fn token_colour(theme: &Theme, token: Token) -> Rgba {
+pub(crate) fn token_colour(theme: &Theme, token: Token) -> Rgba {
     rgb(match token {
         Token::Comment => theme.muted,
         Token::String => theme.ink(theme.palette[2]),

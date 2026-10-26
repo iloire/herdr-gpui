@@ -156,3 +156,25 @@ fn reset_forgets_history_and_keeps_the_cursor_inside() {
     assert!(!buffer.undo());
     assert_eq!(buffer.cursor, 2);
 }
+
+#[test]
+fn taking_the_disk_version_is_one_undoable_step() {
+    let mut buffer = at("one\ntwo\nthree", 6);
+    buffer.insert("X");
+    buffer.replace_all("one\n2\nthree\nfour");
+    assert_eq!(buffer.text(), "one\n2\nthree\nfour");
+    // The cursor keeps its line, clamped to the new line's length.
+    assert_eq!(buffer.cursor, 5);
+    assert!(buffer.undo());
+    assert_eq!(buffer.text(), "one\ntwXo\nthree");
+    assert!(buffer.undo());
+    assert_eq!(buffer.text(), "one\ntwo\nthree");
+}
+
+#[test]
+fn taking_an_identical_version_changes_nothing() {
+    let mut buffer = at("same", 2);
+    assert!(!buffer.replace_all("same"));
+    assert!(!buffer.undo());
+    assert_eq!(buffer.cursor, 2);
+}

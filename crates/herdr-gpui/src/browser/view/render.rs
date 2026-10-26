@@ -1,7 +1,7 @@
 //! Drawing browser tabs: their entries in a group's strip, and the page with
 //! its toolbar where the terminal would be.
 
-use super::{store, tab_label};
+use super::store;
 use crate::{
     HerdrWindow,
     browser::{
@@ -63,7 +63,7 @@ impl HerdrWindow {
                     .id(SharedString::from(format!("browser-tab-{id}")))
                     .debug_selector(move || slot.selector(&format!("browser-tab-{id}")));
                 let face = TabFace {
-                    label: tab_label(&tab.title),
+                    label: self.page_label(&tab, cx),
                     mark,
                     zoomed: false,
                     probe: Probe::Page(id),

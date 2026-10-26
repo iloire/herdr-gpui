@@ -1,16 +1,14 @@
-//! Code tabs: a local source file drawn read-only beside the workspace's
-//! terminals and pages, with its definitions listed as an outline, for a
-//! quick look without leaving the agent's side. `i` makes it editable for a
-//! quick fix (`edit`); real editing belongs to the terminal editor, which
-//! `e` opens at the line in view.
+//! Code tabs: a local source file beside the workspace's terminals and
+//! pages, open to edit as in any editor (`code_edit`), with its definitions
+//! listed as an outline. Open in Editor takes it to the terminal editor at
+//! the cursor's line.
 //!
 //! A tab keeps only the file's path and the line it opened at; the window
 //! keeps each tab's view, made when the tab opens or is first seen after a
-//! restart. The file is read, outlined, and coloured on the background
-//! executor, colours last, so its text shows before a large file is
-//! coloured. Drawing only reads what those produced. The file is read again
-//! when it changes on disk (`browser::disk_watch`), and a markdown file's
-//! tab turns to its rendered page and back (`browser::markdown_toggle`).
+//! restart: the editor, and the outline, read on the background executor
+//! and again after each save. The file is read again when it changes on
+//! disk (`browser::disk_watch`), and a markdown file's tab turns to its
+//! rendered page and back (`browser::markdown_toggle`).
 
 mod edit;
 mod render;
@@ -18,17 +16,14 @@ mod render;
 use crate::{
     HerdrWindow,
     browser::{Location, Store, TabId},
+    code_edit::{CodeEditor, Event, Look},
     code_index::{self, Kind, Language},
     editor::EditorTarget,
-    review::highlight::{self, Span},
     window::Flash,
 };
 use gpui::{prelude::*, *};
 use serde::{Deserialize, Serialize};
-use std::{cell::Cell, ops::Range, path::Path, rc::Rc, sync::Arc};
-
-/// Lines coloured at most; the rest of a longer file draws plain.
-const MAX_COLOURED_LINES: usize = 20_000;
+use std::{cell::Cell, path::Path, rc::Rc, sync::Arc};
 
 /// The local file a code tab shows, and the line it opened at. Saved with
 /// the tabs, so it is checked again whenever it is read.
@@ -81,36 +76,24 @@ struct Entry {
     line: u32,
 }
 
-/// A file as read: its text, where each line is in it, and its outline.
-struct Text {
-    source: String,
-    lines: Vec<Range<usize>>,
-    outline: Vec<Entry>,
-    /// The longest line, which sets how far the code scrolls sideways.
-    widest: usize,
+/// The file's outline, as last read.
+struct Outline {
+    entries: Vec<Entry>,
 }
 
-impl Text {
-    /// Reads the file at `path`. Its text is untrusted: as in a review,
-    /// tabs become spaces and control and direction-override characters go
-    /// before anything is shown, coloured, or outlined, so what is drawn is
-    /// what was read.
+impl Outline {
+    /// Reads the file at `path` and lists its definitions. Its text is
+    /// untrusted: as in a review, tabs become spaces and control and
+    /// direction-override characters go before it is scanned, so a name
+    /// shown is what was read.
     fn read(path: &Path) -> crate::Result<Self> {
         let raw = code_index::read_source(path).ok_or(crate::Error::CodeFileUnreadable)?;
         let mut source = String::with_capacity(raw.len());
-        let mut lines = Vec::new();
         for line in raw.lines() {
-            let start = source.len();
             crate::review::push_clean(&mut source, line);
-            lines.push(start..source.len());
             source.push('\n');
         }
-        let widest = lines
-            .iter()
-            .enumerate()
-            .max_by_key(|(_, line)| line.len())
-            .map_or(0, |(index, _)| index);
-        let outline = path
+        let entries = path
             .to_str()
             .and_then(Language::of)
             .map(|language| code_index::scan(language, &source, 5_000))
@@ -122,97 +105,33 @@ impl Text {
                 line: found.line,
             })
             .collect();
-        Ok(Self {
-            source,
-            lines,
-            outline,
-            widest,
-        })
+        Ok(Self { entries })
     }
-
-    fn line(&self, index: usize) -> &str {
-        self.lines
-            .get(index)
-            .and_then(|range| self.source.get(range.clone()))
-            .unwrap_or_default()
-    }
-}
-
-enum State {
-    Loading,
-    Loaded(Arc<Text>),
-    Failed(String),
 }
 
 pub(crate) struct CodeView {
+    /// The editor's, which holds the keyboard while the tab is used.
     pub(crate) focus: FocusHandle,
-    state: State,
-    /// Each line's colours, once worked out.
-    spans: Arc<Vec<Vec<Span>>>,
-    scroll: UniformListScrollHandle,
-    /// The line brought into view once the text is read, and marked.
-    target: Option<u32>,
-    marked: Option<u32>,
-    outline: bool,
+    editor: Entity<CodeEditor>,
+    outline: Option<Arc<Outline>>,
+    show_outline: bool,
     /// The tab's width as last laid out, which decides whether the outline
     /// fits.
     width: Rc<Cell<f32>>,
-    /// The editor while the tab is being edited.
-    editing: Option<edit::Editing>,
-    /// The newest read; an older one's result is dropped.
+    /// The newest outline read; an older one's result is dropped.
     load: u64,
+    _events: Subscription,
 }
 
 impl CodeView {
-    fn text(&self) -> Option<&Arc<Text>> {
-        match &self.state {
-            State::Loaded(text) => Some(text),
-            State::Loading | State::Failed(_) => None,
-        }
-    }
-
-    /// The row at the top of the view, or the row a pending jump will put
-    /// there. A uniform list never records its rows' bounds in its scroll
-    /// handle, so `ScrollHandle::logical_scroll_top` always says row 0 once
-    /// drawn; the row comes from the scroll offset and the row height, as
-    /// the list itself works out which rows to draw.
-    fn top_row(&self) -> usize {
-        let state = self.scroll.0.borrow();
-        if let Some(item) = &state.deferred_scroll_to_item {
-            return item.item_index;
-        }
-        let count = self.text().map_or(0, |text| text.lines.len());
-        let Some(size) = state.last_item_size.filter(|_| count > 0) else {
-            return 0;
-        };
-        let height = size.contents.height / count as f32;
-        if height <= Pixels::ZERO {
-            return 0;
-        }
-        // Negative or NaN rows saturate to 0.
-        (-state.base_handle.offset().y / height).floor() as usize
-    }
-
-    /// The marked line, and how many lines the read file has.
+    /// The cursor's line, and how many lines the file has, once read.
     #[cfg(test)]
-    pub(crate) fn shown(&self) -> (Option<u32>, Option<usize>) {
-        (self.marked, self.text().map(|text| text.lines.len()))
-    }
-
-    /// Brings 1-based `line` into view and marks it.
-    fn go_to(&mut self, line: u32) {
-        self.marked = Some(line);
-        let row = usize::try_from(line.saturating_sub(1)).unwrap_or(0);
-        // Strict, so a jump centers its line even when already in view.
-        self.scroll
-            .scroll_to_item_strict(row, ScrollStrategy::Center);
-    }
-
-    /// The 1-based line the editor opens at: the marked one, or the top
-    /// line in view.
-    fn editor_line(&self) -> u32 {
-        self.marked
-            .unwrap_or_else(|| u32::try_from(self.top_row() + 1).unwrap_or(1))
+    pub(crate) fn shown(&self, cx: &App) -> (u32, Option<usize>) {
+        let editor = self.editor.read(cx);
+        (
+            editor.cursor_line(),
+            editor.loaded().then(|| editor.line_count()),
+        )
     }
 }
 
@@ -257,28 +176,41 @@ impl HerdrWindow {
             self.show_flash(Flash::warning("Too many tabs are open"), cx);
             return;
         };
-        self.ensure_code_view(id, cx);
-        let Some(view) = self.code_views.get_mut(&id) else {
+        let made = self.ensure_code_view(id, cx);
+        let Some(view) = self.code_views.get(&id) else {
             return;
         };
-        if let Some(line) = target.line {
-            view.target = Some(line);
-            if view.text().is_some() {
-                view.go_to(line);
+        let (editor, focus) = (view.editor.clone(), view.focus.clone());
+        editor.update(cx, |editor, cx| {
+            // An agent may have changed the file since, and the line came
+            // from a newer index: an open tab without edits reads it again
+            // before going there.
+            if !made {
+                editor.disk_changed(cx);
             }
+            if let Some(line) = target.line {
+                editor.go_to_line(line, cx);
+            }
+        });
+        if !made {
+            self.load_code_view(id, cx);
         }
-        let focus = view.focus.clone();
-        // Read again even when the tab was open: an agent may have changed
-        // the file since, and the line came from a newer index. The old text
-        // shows until the new one is read.
-        self.load_code_view(id, cx);
         self.show_browser_tab(id, window, cx);
         window.focus(&focus, cx);
         cx.notify();
     }
 
-    /// Makes `id`'s view from its tab, if the window has none yet. Whether
-    /// it was made.
+    /// How code tabs draw, from the window's settings.
+    fn code_look(&self) -> Look {
+        Look {
+            font: self.config.terminal.clone(),
+            theme: self.theme.clone(),
+            line_height: self.code_line_height(),
+        }
+    }
+
+    /// Makes `id`'s view from its tab, if the window has none yet, and
+    /// starts reading its file. Whether it was made.
     fn ensure_code_view(&mut self, id: TabId, cx: &mut Context<Self>) -> bool {
         if self.code_views.contains_key(&id) {
             return false;
@@ -290,25 +222,35 @@ impl HerdrWindow {
         else {
             return false;
         };
+        let look = self.code_look();
+        let editor = cx.new(|cx| {
+            let mut editor = CodeEditor::new(file.path.clone().into(), look, cx);
+            if let Some(line) = file.line {
+                editor.go_to_line(line, cx);
+            }
+            editor
+        });
+        let events = cx.subscribe(&editor, move |this, editor, event: &Event, cx| {
+            this.code_edit_event(id, &editor, event, cx);
+        });
+        let focus = editor.read(cx).focus.clone();
         self.code_views.insert(
             id,
             CodeView {
-                focus: cx.focus_handle(),
-                state: State::Loading,
-                spans: Arc::default(),
-                scroll: UniformListScrollHandle::new(),
-                target: file.line,
-                marked: None,
-                outline: true,
+                focus,
+                editor,
+                outline: None,
+                show_outline: true,
                 width: Rc::default(),
-                editing: None,
                 load: 0,
+                _events: events,
             },
         );
+        self.load_code_view(id, cx);
         true
     }
 
-    /// Reads tab `id`'s file off the UI thread, then colours it.
+    /// Reads tab `id`'s outline off the UI thread.
     pub(crate) fn load_code_view(&mut self, id: TabId, cx: &mut Context<Self>) {
         let Some(Location::Code { file }) = cx
             .try_global::<Store>()
@@ -325,28 +267,15 @@ impl HerdrWindow {
         let path = std::path::PathBuf::from(&file.path);
         let read = cx
             .background_executor()
-            .spawn(async move { Text::read(&path).map(Arc::new) });
-        let executor = cx.background_executor().clone();
+            .spawn(async move { Outline::read(&path).map(Arc::new) });
         cx.spawn(async move |this, cx| {
-            let text = read.await;
-            let coloured = text.as_ref().ok().cloned();
-            let current = this
-                .update(cx, |this, cx| this.code_view_read(id, load, text, cx))
-                .unwrap_or(false);
-            let Some(text) = coloured.filter(|_| current) else {
-                return;
-            };
-            let name = file.name().to_owned();
-            let spans = executor
-                .spawn(
-                    async move { highlight::colour_file(&name, &text.source, MAX_COLOURED_LINES) },
-                )
-                .await;
+            let outline = read.await;
             let _ = this.update(cx, |this, cx| {
                 if let Some(view) = this.code_views.get_mut(&id)
                     && view.load == load
                 {
-                    view.spans = Arc::new(spans);
+                    // An unreadable file says so in the editor.
+                    view.outline = outline.ok();
                     cx.notify();
                 }
             });
@@ -354,41 +283,9 @@ impl HerdrWindow {
         .detach();
     }
 
-    /// Shows a read file; whether this read is still the newest.
-    fn code_view_read(
-        &mut self,
-        id: TabId,
-        load: u64,
-        text: crate::Result<Arc<Text>>,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        let Some(view) = self
-            .code_views
-            .get_mut(&id)
-            .filter(|view| view.load == load)
-        else {
-            return false;
-        };
-        match text {
-            Ok(text) => {
-                // Colours of other text would land on the wrong words.
-                if view.text().is_some_and(|old| old.source != text.source) {
-                    view.spans = Arc::default();
-                }
-                view.state = State::Loaded(text);
-                if let Some(line) = view.target.take() {
-                    view.go_to(line);
-                }
-            }
-            Err(error) => view.state = State::Failed(error.to_string()),
-        }
-        cx.notify();
-        true
-    }
-
     /// Runs every window tick: code tabs of the focused workspace with no
     /// view yet, such as ones restored from the last run, get one; the
-    /// views of closed tabs go.
+    /// views of closed tabs go, their editors saving what is unsaved.
     pub(crate) fn poll_code_views(&mut self, cx: &mut Context<Self>) {
         let Some(store) = cx.try_global::<Store>() else {
             self.code_views.clear();
@@ -407,14 +304,12 @@ impl HerdrWindow {
             .map(|tab| tab.id)
             .collect();
         for id in missing {
-            if self.ensure_code_view(id, cx) {
-                self.load_code_view(id, cx);
-            }
+            self.ensure_code_view(id, cx);
         }
     }
 
-    /// Opens tab `id`'s file in the terminal editor, at the marked line or
-    /// the top one in view, beside the focused pane.
+    /// Opens tab `id`'s file in the terminal editor at the cursor's line,
+    /// beside the focused pane, saving the tab's edits first.
     fn open_code_view_in_editor(&mut self, id: TabId, cx: &mut Context<Self>) {
         let Some(Location::Code { file }) = cx
             .try_global::<Store>()
@@ -423,59 +318,19 @@ impl HerdrWindow {
         else {
             return;
         };
-        let line = self.code_views.get(&id).map(CodeView::editor_line);
+        let line = self.code_views.get(&id).map(|view| {
+            view.editor.update(cx, |editor, cx| {
+                if editor.dirty() {
+                    editor.save(false, cx);
+                }
+                editor.cursor_line()
+            })
+        });
         let target = EditorTarget {
             path: file.path.into(),
             line,
         };
         self.open_in_editor(&target, None, cx);
-    }
-
-    /// Handles a key in a code tab; whether it was the tab's.
-    fn code_view_key(
-        &mut self,
-        id: TabId,
-        event: &KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        let keystroke = &event.keystroke;
-        let modifiers = keystroke.modifiers;
-        if modifiers.control || modifiers.alt || modifiers.platform || modifiers.function {
-            return false;
-        }
-        if keystroke.key == "e" && !modifiers.shift {
-            self.open_code_view_in_editor(id, cx);
-            return true;
-        }
-        if keystroke.key == "i" && !modifiers.shift {
-            self.edit_code_view(id, window, cx);
-            return true;
-        }
-        let Some(view) = self.code_views.get_mut(&id) else {
-            return false;
-        };
-        let count = view.text().map_or(0, |text| text.lines.len());
-        let top = view.top_row();
-        let page = 20;
-        let row = match (keystroke.key.as_str(), modifiers.shift) {
-            ("j" | "down", false) => top + 1,
-            ("k" | "up", false) => top.saturating_sub(1),
-            ("space", false) | ("pagedown", _) => top + page,
-            ("space", true) | ("pageup", _) => top.saturating_sub(page),
-            ("home", _) | ("g", false) => 0,
-            ("end", _) | ("g", true) => count.saturating_sub(1),
-            ("o", false) => {
-                view.outline = !view.outline;
-                cx.notify();
-                return true;
-            }
-            _ => return false,
-        };
-        view.scroll
-            .scroll_to_item_strict(row.min(count.saturating_sub(1)), ScrollStrategy::Top);
-        cx.notify();
-        true
     }
 }
 

@@ -1,20 +1,23 @@
 //! Drawing the editor: line numbers, then each line in view as drawn text
-//! (`display`) with its part of the selection, the caret, and composed text
+//! (`display`) in its syntax colours (`colour`), with the current line
+//! tinted, its part of the selection, the caret, and composed text
 //! underlined. Only the lines in view are laid out. Each records where it
 //! was drawn, which the mouse and the input method read back (`input`).
 
-use super::{CodeEditor, Painted, display::Shown};
-use crate::{actions, fonts::StyledFont, input::ViewInputHandler};
+use super::{CodeEditor, Painted, colour::segments, display::Shown};
+use crate::{actions, fonts::StyledFont, input::ViewInputHandler, review::token_colour};
 use gpui::{
     AnyElement, Bounds, ContentMask, Context, CursorStyle, ListHorizontalSizingBehavior,
-    MouseButton, MouseDownEvent, MouseMoveEvent, TextAlign, TextRun, UnderlineStyle, Window,
-    canvas, div, fill, point, prelude::*, px, rgb, size, uniform_list,
+    MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Rgba, TextAlign, TextRun, UnderlineStyle,
+    Window, canvas, div, fill, point, prelude::*, px, rgb, rgba, size, uniform_list,
 };
 use std::ops::Range;
 
 /// A character's width as a share of the font size, to size lines for
 /// sideways scrolling before they are laid out.
 const ADVANCE: f32 = 0.62;
+/// Room kept between the caret and the side of the view it scrolls to.
+const MARGIN: f32 = 24.;
 
 /// One line's share of what is drawn over its text.
 struct Marks {
@@ -22,12 +25,13 @@ struct Marks {
     /// line's end.
     selected: Option<(Range<usize>, bool)>,
     caret: Option<usize>,
-    marked: Option<Range<usize>>,
+    /// Whether this is the cursor's line, tinted while nothing is selected.
+    current: bool,
 }
 
 impl CodeEditor {
-    /// What of the selection, caret, and composition falls on `line`, in
-    /// the drawn offsets of `shown`.
+    /// What of the selection and caret falls on `line`, in the drawn
+    /// offsets of `shown`.
     fn marks(&self, line: usize, shown: &Shown, focused: bool) -> Marks {
         let range = self.buffer.line_range(line);
         let local = |offset: usize| shown.drawn(offset.clamp(range.start, range.end) - range.start);
@@ -40,36 +44,59 @@ impl CodeEditor {
                         selection.end > range.end,
                     )
                 });
-        let caret = (focused && self.buffer.line_of(self.buffer.cursor) == line)
-            .then(|| local(self.buffer.cursor));
-        let marked = self
-            .buffer
-            .marked
-            .clone()
-            .filter(|marked| marked.start <= range.end && marked.end >= range.start)
-            .map(|marked| local(marked.start)..local(marked.end));
+        let on_line = self.buffer.line_of(self.buffer.cursor) == line;
         Marks {
             selected,
-            caret,
-            marked,
+            caret: (focused && on_line).then(|| local(self.buffer.cursor)),
+            current: on_line && selection.is_empty(),
         }
     }
 
+    /// Line `line`'s runs: its length, colour, and whether it is composed.
+    fn runs(&self, line: usize, shown: &Shown) -> Vec<(usize, Rgba, bool)> {
+        let text = self.buffer.line(line);
+        let start = self.buffer.line_range(line).start;
+        let marked = self.buffer.marked.clone().map(|marked| {
+            marked.start.saturating_sub(start).min(text.len())
+                ..marked.end.saturating_sub(start).min(text.len())
+        });
+        let spans = self.spans.get(line).map_or(&[][..], Vec::as_slice);
+        let theme = &self.look.theme;
+        segments(text, shown, spans, marked)
+            .into_iter()
+            .map(|segment| {
+                let colour = segment
+                    .token
+                    .map_or(rgb(theme.foreground), |token| token_colour(theme, token));
+                (segment.range.len(), colour, segment.marked)
+            })
+            .collect()
+    }
+
     fn row(&self, line: usize, gutter: f32, focused: bool, cx: &mut Context<Self>) -> AnyElement {
-        let theme = &self.theme;
-        let height = px(self.line_height);
+        let theme = &self.look.theme;
+        let height = px(self.look.line_height);
         let shown = Shown::of(self.buffer.line(line));
         let marks = self.marks(line, &shown, focused);
-        let width = (shown.text.chars().count() + 2) as f32 * self.font.size * ADVANCE;
-        let text = shown.text.clone();
-        let (foreground, selection, cursor) = (theme.foreground, theme.active, theme.cursor);
+        let runs = self.runs(line, &shown);
+        let width = (shown.text.chars().count() + 2) as f32 * self.look.font.size * ADVANCE;
+        let drawn = shown.text.clone();
+        let (selection, cursor) = (rgb(theme.active), rgb(theme.cursor));
+        let current = rgba((theme.active << 8) | 0x66);
+        let number = rgb(if marks.current {
+            theme.foreground
+        } else {
+            theme.muted
+        });
         let editor = cx.entity();
         div()
             .id(line)
+            .debug_selector(move || format!("code-line-{line}"))
             .h(height)
             .flex()
             .items_center()
             .whitespace_nowrap()
+            .when(marks.current, |row| row.bg(current))
             .child(
                 div()
                     .flex_none()
@@ -77,50 +104,34 @@ impl CodeEditor {
                     .pr(px(12.))
                     .flex()
                     .justify_end()
-                    .text_color(rgb(theme.muted))
+                    .text_color(number)
                     .child((line + 1).to_string()),
             )
             .child(
                 canvas(
                     move |_, window, _| {
-                        let run = TextRun {
-                            len: text.len(),
-                            font: window.text_style().font(),
-                            color: rgb(foreground).into(),
-                            background_color: None,
-                            underline: None,
-                            strikethrough: None,
-                        };
-                        let runs = match &marks.marked {
-                            Some(marked) if !marked.is_empty() => [
-                                (0..marked.start, None),
-                                (
-                                    marked.clone(),
-                                    Some(UnderlineStyle {
-                                        color: Some(run.color),
-                                        thickness: px(1.),
-                                        wavy: false,
-                                    }),
-                                ),
-                                (marked.end..text.len(), None),
-                            ]
-                            .into_iter()
-                            .filter(|(range, _)| !range.is_empty())
-                            .map(|(range, underline)| TextRun {
-                                len: range.len(),
-                                underline,
-                                ..run.clone()
+                        let font = window.text_style().font();
+                        let runs: Vec<TextRun> = runs
+                            .iter()
+                            .map(|(len, colour, marked)| TextRun {
+                                len: *len,
+                                font: font.clone(),
+                                color: (*colour).into(),
+                                background_color: None,
+                                underline: marked.then(|| UnderlineStyle {
+                                    color: Some((*colour).into()),
+                                    thickness: px(1.),
+                                    wavy: false,
+                                }),
+                                strikethrough: None,
                             })
-                            .collect(),
-                            _ => vec![run],
-                        };
+                            .collect();
                         let size = window.text_style().font_size.to_pixels(window.rem_size());
-                        (
+                        let layout =
                             window
                                 .text_system()
-                                .shape_line(text.into(), size, &runs, None),
-                            marks,
-                        )
+                                .shape_line(drawn.into(), size, &runs, None);
+                        (layout, marks)
                     },
                     move |bounds, (layout, marks), window, cx| {
                         window.with_content_mask(Some(ContentMask { bounds }), |window| {
@@ -135,7 +146,7 @@ impl CodeEditor {
                                         ),
                                         point(bounds.left() + end, bounds.bottom()),
                                     ),
-                                    rgb(selection),
+                                    selection,
                                 ));
                             }
                             let _ = layout.paint(
@@ -155,11 +166,14 @@ impl CodeEditor {
                                         ),
                                         size(px(1.5), height),
                                     ),
-                                    rgb(cursor),
+                                    cursor,
                                 ));
                             }
                         });
-                        editor.update(cx, |editor, _| {
+                        let caret = marks
+                            .caret
+                            .map(|caret| bounds.left() + layout.x_for_index(caret));
+                        let scrolled = editor.update(cx, |editor, _| {
                             editor.painted.insert(
                                 line,
                                 Painted {
@@ -168,7 +182,11 @@ impl CodeEditor {
                                     layout,
                                 },
                             );
+                            caret.is_some_and(|caret| editor.follow_caret(caret))
                         });
+                        if scrolled {
+                            window.refresh();
+                        }
                     },
                 )
                 .w(px(width))
@@ -176,12 +194,34 @@ impl CodeEditor {
             )
             .into_any_element()
     }
+
+    /// Scrolls sideways so the caret, drawn at `x`, is in view, after an
+    /// edit or move asked for it. Whether it scrolled.
+    fn follow_caret(&mut self, x: Pixels) -> bool {
+        if !std::mem::take(&mut self.follow) {
+            return false;
+        }
+        let Some(viewport) = self.viewport else {
+            return false;
+        };
+        let handle = self.scroll.0.borrow().base_handle.clone();
+        let offset = handle.offset();
+        let shift = if x > viewport.right() - px(MARGIN) {
+            viewport.right() - px(MARGIN) - x
+        } else if x < viewport.left() + px(MARGIN) && offset.x < px(0.) {
+            (viewport.left() + px(MARGIN) - x).min(-offset.x)
+        } else {
+            return false;
+        };
+        handle.set_offset(point((offset.x + shift).min(px(0.)), offset.y));
+        true
+    }
 }
 
 impl Render for CodeEditor {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.painted.clear();
-        let font = self.font.clone();
+        let font = self.look.font.clone();
         let count = self.buffer.line_count();
         let digits = count.max(1).ilog10() + 1;
         let gutter = (digits as f32 + 2.) * font.size * ADVANCE;
@@ -199,8 +239,8 @@ impl Render for CodeEditor {
             .flex_col()
             .text_font(&font)
             .text_size(px(font.size))
-            .line_height(px(self.line_height))
-            .text_color(rgb(self.theme.foreground))
+            .line_height(px(self.look.line_height))
+            .text_color(rgb(self.look.theme.foreground))
             .track_focus(&self.focus)
             .cursor(CursorStyle::IBeam)
             .on_key_down(cx.listener(Self::key_down))
@@ -284,6 +324,7 @@ impl Render for CodeEditor {
                             ViewInputHandler::new(bounds, editor.clone()),
                             cx,
                         );
+                        editor.update(cx, |editor, _| editor.viewport = Some(bounds));
                     },
                 )
                 .absolute()

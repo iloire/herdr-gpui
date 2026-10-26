@@ -52,6 +52,10 @@ pub(crate) fn load(path: &Path) -> Result<Loaded, Error> {
 pub(crate) fn save(path: &Path, base: &Loaded, text: &str, force: bool) -> Result<Loaded, Error> {
     if !force {
         let now = load(path)?;
+        // Already written, as by a save still under way when the tab closed.
+        if now.text == text {
+            return Ok(now);
+        }
         if now != *base {
             return Err(Error::Changed);
         }

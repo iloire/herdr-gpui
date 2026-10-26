@@ -1,16 +1,22 @@
-//! Quick edits in a code tab: the tab's file as plain text to type into,
-//! for a fix too small to open an editor for. It is a text field over many
-//! lines (selection, the clipboard, undo, the platform's input methods),
-//! not an IDE: no completion, no colouring while editing. The file is read
-//! and saved on the background executor; saving refuses to write over a
-//! file an agent changed meanwhile (`file`), and a change on disk reloads
-//! the text while it holds no edits of its own.
+//! A code tab's editor: the tab's file, coloured by its syntax, to type
+//! into as in any editor. It is a text field over many lines (selection,
+//! the clipboard, undo, the platform's input methods), not an IDE: no
+//! completion, no language server.
+//!
+//! Edits are saved a moment after typing stops, and on Cmd-S, when the tab
+//! closes, and when the app quits (`disk`). Saving refuses to write over a
+//! file an agent changed meanwhile (`file`); the tab then offers to keep
+//! these edits or take the file's, which is one more step undo takes back.
+//! A file changed on disk while the editor holds no edits of its own is
+//! taken the same way.
 //!
 //! The editor is an entity of its own, as the platform input API wants one
-//! to call back; the code tab holds it while editing and draws it in place
-//! of the read-only view (see `code_view`).
+//! to call back; the code tab draws it beside the file's outline (see
+//! `code_view`).
 
 mod buffer;
+mod colour;
+mod disk;
 mod display;
 pub mod error;
 mod file;
@@ -23,26 +29,29 @@ mod tests;
 
 pub use error::Error;
 
-use crate::config::{FontConfig, Theme};
+use crate::{
+    config::{FontConfig, Theme},
+    review::highlight::Span,
+};
 use buffer::Buffer;
 use display::Shown;
 use file::Loaded;
 use gpui::{
-    App, Bounds, Context, EventEmitter, FocusHandle, Focusable, Pixels, ShapedLine, Task,
-    UniformListScrollHandle,
+    App, Bounds, Context, EventEmitter, FocusHandle, Focusable, Pixels, ShapedLine, Subscription,
+    Task, UniformListScrollHandle,
 };
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 /// What the editor tells the tab holding it.
 #[derive(Debug)]
 pub(crate) enum Event {
-    /// The text changed, or was saved: the tab redraws its header.
+    /// The text, or where it stands with the file, changed: the tab
+    /// redraws its header and title.
     Changed,
+    /// A save wrote the file.
     Saved,
-    /// Saving failed; the reason is the editor's `failure`.
+    /// Reading or saving failed; the reason is the editor's `failure`.
     Failed,
-    /// Escape: the user is done editing.
-    Done,
 }
 
 /// Where the editor stands with the file on disk.
@@ -52,7 +61,7 @@ pub(crate) enum Disk {
     Loading,
     Ready,
     Saving,
-    /// The last save or load failed.
+    /// The last save or read failed.
     Failed(Error),
 }
 
@@ -64,24 +73,41 @@ struct Painted {
     layout: ShapedLine,
 }
 
+/// How the editor is drawn, from the window's settings.
+#[derive(Clone, PartialEq)]
+pub(crate) struct Look {
+    pub(crate) font: FontConfig,
+    pub(crate) theme: Theme,
+    pub(crate) line_height: f32,
+}
+
 pub(crate) struct CodeEditor {
     pub(crate) focus: FocusHandle,
     path: PathBuf,
     buffer: Buffer,
     /// The file as last read or saved: what a save expects to find on disk.
     base: Option<Loaded>,
-    pub(crate) disk: Disk,
-    font: FontConfig,
-    theme: Theme,
-    line_height: f32,
+    disk: Disk,
+    look: Look,
+    /// Each line's syntax colours, from the text as last coloured.
+    spans: Arc<Vec<Vec<Span>>>,
     scroll: UniformListScrollHandle,
     painted: HashMap<usize, Painted>,
+    /// The text area as last drawn, which the cursor is kept inside.
+    viewport: Option<Bounds<Pixels>>,
+    /// Whether the next paint scrolls sideways to the cursor: set by edits
+    /// and moves, so scrolling by hand is left alone.
+    follow: bool,
     selecting: bool,
     /// Indent Tab inserts: a tab in a file indented with tabs.
     indent: &'static str,
     /// The 1-based line to put the cursor on once the file is read.
     target: Option<u32>,
+    /// A read or save under way.
     task: Option<Task<()>>,
+    autosave: Option<Task<()>>,
+    colouring: Option<Task<()>>,
+    _flush: [Subscription; 2],
 }
 
 impl EventEmitter<Event> for CodeEditor {}
@@ -94,28 +120,43 @@ impl Focusable for CodeEditor {
 
 impl CodeEditor {
     /// An editor on `path`, starting to read it.
-    pub(crate) fn new(
-        path: PathBuf,
-        font: FontConfig,
-        theme: Theme,
-        line_height: f32,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    pub(crate) fn new(path: PathBuf, look: Look, cx: &mut Context<Self>) -> Self {
+        // Whatever is unsaved is written when the tab goes, and before the
+        // app quits.
+        let flush = [
+            cx.on_release(|this, cx| {
+                if let Some(write) = this.flush(cx) {
+                    write.detach();
+                }
+            }),
+            cx.on_app_quit(|this, cx| {
+                let write = this.flush(cx);
+                async move {
+                    if let Some(write) = write {
+                        write.await;
+                    }
+                }
+            }),
+        ];
         let mut editor = Self {
             focus: cx.focus_handle(),
             path,
             buffer: Buffer::default(),
             base: None,
             disk: Disk::Loading,
-            font,
-            theme,
-            line_height,
+            look,
+            spans: Arc::default(),
             scroll: UniformListScrollHandle::new(),
             painted: HashMap::new(),
+            viewport: None,
+            follow: false,
             selecting: false,
             indent: "    ",
             target: None,
             task: None,
+            autosave: None,
+            colouring: None,
+            _flush: flush,
         };
         editor.reload(cx);
         editor
@@ -128,98 +169,14 @@ impl CodeEditor {
             .is_some_and(|base| base.text != self.buffer.text())
     }
 
-    pub(crate) fn busy(&self) -> bool {
-        self.task.is_some()
+    /// Whether the file has been read.
+    #[cfg(test)]
+    pub(crate) fn loaded(&self) -> bool {
+        self.base.is_some()
     }
 
-    /// Puts the cursor on 1-based `line`, as the read-only view had it.
-    pub(crate) fn go_to_line(&mut self, line: u32) {
-        if self.base.is_none() {
-            self.target = Some(line);
-            return;
-        }
-        let line = usize::try_from(line).unwrap_or(1).saturating_sub(1);
-        let start = self.buffer.line_range(line).start;
-        self.buffer.select_to(start, false);
-        self.scroll
-            .scroll_to_item_strict(line, gpui::ScrollStrategy::Center);
-    }
-
-    /// Reads the file again, dropping any edits.
-    pub(crate) fn reload(&mut self, cx: &mut Context<Self>) {
-        let path = self.path.clone();
-        let read = cx
-            .background_executor()
-            .spawn(async move { file::load(&path) });
-        self.task = Some(cx.spawn(async move |this, cx| {
-            let loaded = read.await;
-            let _ = this.update(cx, |this, cx| {
-                this.task = None;
-                match loaded {
-                    Ok(loaded) => this.loaded(loaded),
-                    Err(error) => this.disk = Disk::Failed(error),
-                }
-                cx.emit(Event::Changed);
-                cx.notify();
-            });
-        }));
-    }
-
-    fn loaded(&mut self, loaded: Loaded) {
-        // Our own save, seen again on disk: keep the cursor and history.
-        if self.base.as_ref() == Some(&loaded) && !self.dirty() {
-            self.disk = Disk::Ready;
-            return;
-        }
-        let tabs = loaded.text.lines().any(|line| line.starts_with('\t'));
-        self.indent = if tabs { "\t" } else { "    " };
-        self.buffer.reset(loaded.text.clone());
-        self.base = Some(loaded);
-        self.disk = Disk::Ready;
-        if let Some(line) = self.target.take() {
-            self.go_to_line(line);
-        }
-    }
-
-    /// The file changed on disk: reloads it when the text holds no edits,
-    /// or else leaves the next save to find the change.
-    pub(crate) fn disk_changed(&mut self, cx: &mut Context<Self>) {
-        if !self.dirty() && !self.busy() {
-            self.reload(cx);
-        }
-    }
-
-    /// Writes the text to the file; `force` writes over a change on disk.
-    pub(crate) fn save(&mut self, force: bool, cx: &mut Context<Self>) {
-        let Some(base) = self.base.clone().filter(|_| !self.busy()) else {
-            return;
-        };
-        let path = self.path.clone();
-        let text: Arc<str> = self.buffer.text().into();
-        let write = cx
-            .background_executor()
-            .spawn(async move { file::save(&path, &base, &text, force) });
-        self.disk = Disk::Saving;
-        self.task = Some(cx.spawn(async move |this, cx| {
-            let saved = write.await;
-            let _ = this.update(cx, |this, cx| {
-                this.task = None;
-                match saved {
-                    Ok(saved) => {
-                        this.base = Some(saved);
-                        this.disk = Disk::Ready;
-                        cx.emit(Event::Saved);
-                    }
-                    Err(error) => {
-                        this.disk = Disk::Failed(error);
-                        cx.emit(Event::Failed);
-                    }
-                }
-                cx.emit(Event::Changed);
-                cx.notify();
-            });
-        }));
-        cx.notify();
+    pub(crate) fn saving(&self) -> bool {
+        matches!(self.disk, Disk::Saving)
     }
 
     /// Whether the last save found the file changed on disk.
@@ -234,16 +191,60 @@ impl CodeEditor {
         }
     }
 
+    /// How many lines are coloured.
+    #[cfg(test)]
+    pub(crate) fn coloured_lines(&self) -> usize {
+        self.spans.len()
+    }
+
+    /// How many lines the text has, not counting an empty last one.
+    #[cfg(test)]
+    pub(crate) fn line_count(&self) -> usize {
+        self.buffer.text().lines().count()
+    }
+
+    /// The 1-based line the cursor is on.
+    pub(crate) fn cursor_line(&self) -> u32 {
+        u32::try_from(self.buffer.line_of(self.buffer.cursor) + 1).unwrap_or(u32::MAX)
+    }
+
+    pub(crate) fn set_look(&mut self, look: Look, cx: &mut Context<Self>) {
+        if self.look != look {
+            self.look = look;
+            cx.notify();
+        }
+    }
+
+    /// Puts the cursor on 1-based `line`, in the middle of the view.
+    pub(crate) fn go_to_line(&mut self, line: u32, cx: &mut Context<Self>) {
+        // A read under way may bring the line: it goes there once done.
+        if matches!(self.disk, Disk::Loading) {
+            self.target = Some(line);
+            return;
+        }
+        let line = usize::try_from(line)
+            .unwrap_or(usize::MAX)
+            .saturating_sub(1)
+            .min(self.buffer.line_count() - 1);
+        let start = self.buffer.line_range(line).start;
+        self.buffer.select_to(start, false);
+        self.scroll
+            .scroll_to_item_strict(line, gpui::ScrollStrategy::Center);
+        self.follow = true;
+        cx.notify();
+    }
+
     /// Scrolls the cursor's line into view, by as little as it takes.
-    fn reveal_cursor(&self) {
+    fn reveal_cursor(&mut self) {
         let line = self.buffer.line_of(self.buffer.cursor);
         self.scroll
             .scroll_to_item(line, gpui::ScrollStrategy::Nearest);
+        self.follow = true;
     }
 
     fn edited(&mut self, changed: bool, cx: &mut Context<Self>) {
         if changed {
-            cx.emit(Event::Changed);
+            self.text_changed(cx);
         }
         self.reveal_cursor();
         cx.notify();

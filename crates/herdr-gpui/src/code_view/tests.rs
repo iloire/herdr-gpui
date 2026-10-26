@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 // Not a glob: the parent's `gpui::*` would shadow the `#[test]` that
 // `gpui::test` expands to.
-use super::{CodeFile, State, Text};
+use super::{CodeFile, Outline};
 use crate::{
     HerdrWindow,
     browser::{Location, Store, scope},
@@ -33,7 +33,7 @@ fn saved_code_tabs_are_checked_when_read() {
 }
 
 #[test]
-fn a_file_is_read_into_lines_and_an_outline() {
+fn a_file_is_read_into_an_outline() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("lib.rs");
     std::fs::write(
@@ -41,35 +41,29 @@ fn a_file_is_read_into_lines_and_an_outline() {
         "pub struct Pane;\r\n\r\nimpl Pane {\n    fn a_much_longer_line(&self) {}\n}",
     )
     .unwrap();
-    let text = Text::read(&path).unwrap();
-    assert_eq!(text.lines.len(), 5);
-    assert_eq!(text.line(0), "pub struct Pane;");
-    assert_eq!(text.line(1), "");
-    assert_eq!(text.line(4), "}");
-    assert_eq!(text.line(9), "");
-    assert_eq!(text.widest, 3);
-    let outline: Vec<_> = text
-        .outline
+    let outline: Vec<_> = Outline::read(&path)
+        .unwrap()
+        .entries
         .iter()
-        .map(|entry| (entry.name.as_str(), entry.kind, entry.line))
+        .map(|entry| (entry.name.clone(), entry.kind, entry.line))
         .collect();
     assert_eq!(
         outline,
         [
-            ("Pane", Kind::Type, 1),
-            ("impl Pane", Kind::Implementation, 3),
-            ("a_much_longer_line", Kind::Method, 4),
+            ("Pane".to_owned(), Kind::Type, 1),
+            ("impl Pane".to_owned(), Kind::Implementation, 3),
+            ("a_much_longer_line".to_owned(), Kind::Method, 4),
         ]
     );
-    // Tabs widen and a direction override never reaches the screen.
-    std::fs::write(&path, "\tlet a = \"\u{202e}x\";\n").unwrap();
-    let text = Text::read(&path).unwrap();
-    assert_eq!(text.line(0), "    let a = \"x\";");
+    // A direction override never reaches a listed name.
+    std::fs::write(&path, "fn \u{202e}evil() {}\n").unwrap();
+    let entries = Outline::read(&path).unwrap().entries;
+    assert_eq!(entries[0].name, "evil");
     // A missing or binary file says so.
-    assert!(Text::read(&dir.path().join("gone.rs")).is_err());
+    assert!(Outline::read(&dir.path().join("gone.rs")).is_err());
     std::fs::write(dir.path().join("blob.bin"), b"\0\x01").unwrap();
     assert!(matches!(
-        Text::read(&dir.path().join("blob.bin")),
+        Outline::read(&dir.path().join("blob.bin")),
         Err(crate::Error::CodeFileUnreadable)
     ));
 }
@@ -107,10 +101,14 @@ fn a_code_tab_shows_its_file_at_a_line_and_keeps_one_tab_per_file(cx: &mut TestA
     };
     open(40, &view, cx);
     draw(cx);
-    view.read_with(cx, |view, _| {
+    view.read_with(cx, |view, cx| {
         let code = view.code_views.values().next().unwrap();
-        assert_eq!(code.shown(), (Some(40), Some(80)));
-        assert_eq!(code.spans.len(), 80, "coloured as Rust");
+        assert_eq!(code.shown(cx), (40, Some(80)));
+        assert_eq!(
+            code.editor.read(cx).coloured_lines(),
+            80,
+            "coloured as Rust"
+        );
     });
     assert!(cx.debug_bounds("code-view").is_some());
     assert!(cx.debug_bounds("code-line-39").is_some());
@@ -126,11 +124,12 @@ fn a_code_tab_shows_its_file_at_a_line_and_keeps_one_tab_per_file(cx: &mut TestA
         let tabs = cx.global::<Store>();
         let (scope, workspace) = view.browser_key().unwrap();
         assert_eq!(tabs.in_workspace(&scope, &workspace).count(), 1);
-        assert_eq!(view.code_views.values().next().unwrap().shown().0, Some(2));
+        assert_eq!(view.code_views.values().next().unwrap().shown(cx).0, 2);
     });
 
-    // `o` hides the outline, `e` opens the editor at the marked line, which
-    // this fixture's missing connection refuses.
+    // The tab opens ready to type at its line. Open in Editor saves the
+    // edit, then opens the terminal editor at the cursor's line, which this
+    // fixture's missing connection refuses.
     let id = view.read_with(cx, |view, _| *view.code_views.keys().next().unwrap());
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
@@ -139,9 +138,14 @@ fn a_code_tab_shows_its_file_at_a_line_and_keeps_one_tab_per_file(cx: &mut TestA
         })
     });
     draw(cx);
-    cx.simulate_keystrokes("o");
-    view.read_with(cx, |view, _| assert!(!view.code_views[&id].outline));
-    cx.simulate_keystrokes("e");
+    cx.simulate_input("o");
+    cx.update(|_, cx| view.update(cx, |view, cx| view.open_code_view_in_editor(id, cx)));
+    cx.run_until_parked();
+    assert!(
+        std::fs::read_to_string(&path)
+            .unwrap()
+            .contains("\nofn f2() {}\n")
+    );
     let refusal = if crate::editor::SUPPORTED {
         crate::Error::NotConnected
     } else {
@@ -173,8 +177,8 @@ fn a_restored_code_tab_reads_its_file_and_a_closed_one_is_forgotten(cx: &mut Tes
     });
     cx.update(|_, cx| view.update(cx, |view, cx| view.poll_code_views(cx)));
     cx.run_until_parked();
-    view.read_with(cx, |view, _| {
-        assert!(matches!(view.code_views[&id].state, State::Failed(_)));
+    view.read_with(cx, |view, cx| {
+        assert!(view.code_views[&id].editor.read(cx).failure().is_some());
     });
     cx.update(|_, cx| {
         Store::update(cx, |store| store.close(id));
@@ -205,13 +209,11 @@ fn reopening_a_code_tab_reads_its_file_again(cx: &mut TestAppContext) {
     // An agent edits the file, and a newer index points into the new text.
     std::fs::write(&path, "fn old() {}\nfn new() {}\nfn newer() {}\n").unwrap();
     open(3, &view, cx);
-    view.read_with(cx, |view, _| {
+    view.read_with(cx, |view, cx| {
         assert_eq!(view.code_views.len(), 1);
         let code = view.code_views.values().next().unwrap();
-        assert_eq!(code.shown(), (Some(3), Some(3)));
-        assert_eq!(code.text().unwrap().line(2), "fn newer() {}");
+        assert_eq!(code.shown(cx), (3, Some(3)));
     });
 }
 
 mod editing;
-mod top_row;

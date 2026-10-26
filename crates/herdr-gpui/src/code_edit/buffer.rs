@@ -350,8 +350,48 @@ impl Buffer {
         self.cursor = self.boundary(self.cursor.min(self.text.len()));
     }
 
-    /// Replaces the whole text, as reloading from disk does, forgetting its
-    /// history and keeping the cursor near where it was.
+    /// Replaces the whole text with `text`, as taking the file's version
+    /// from disk does: one step undo takes back, keeping the cursor on the
+    /// same line and column where the new text has them. Only the stretch
+    /// that differs is replaced, so undo restores just that.
+    pub(crate) fn replace_all(&mut self, text: &str) -> bool {
+        let old = self.text.as_str();
+        let prefix = old
+            .char_indices()
+            .zip(text.chars())
+            .take_while(|((_, a), b)| a == b)
+            .last()
+            .map_or(0, |((at, c), _)| at + c.len_utf8());
+        let suffix = old[prefix..]
+            .chars()
+            .rev()
+            .zip(text[prefix..].chars().rev())
+            .take_while(|(a, b)| a == b)
+            .map(|(c, _)| c.len_utf8())
+            .sum::<usize>();
+        let line = self.line_of(self.cursor);
+        let column = self.text[self.line_range(line).start..self.cursor]
+            .chars()
+            .count();
+        let range = prefix..old.len() - suffix;
+        let inserted = &text[prefix..text.len() - suffix];
+        self.sealed = true;
+        let changed = self.splice(range, inserted);
+        self.sealed = true;
+        let line = line.min(self.line_count() - 1);
+        let within = self.line(line);
+        let at = self.line_range(line).start
+            + within
+                .char_indices()
+                .nth(column)
+                .map_or(within.len(), |(at, _)| at);
+        self.marked = None;
+        self.select_to(at, false);
+        changed
+    }
+
+    /// Replaces the whole text, as first reading the file does, forgetting
+    /// its history and keeping the cursor near where it was.
     pub(crate) fn reset(&mut self, text: String) {
         let cursor = self.cursor;
         *self = Self::new(text);

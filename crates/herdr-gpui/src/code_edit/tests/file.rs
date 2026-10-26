@@ -61,3 +61,14 @@ fn binary_files_are_refused() {
     fs::write(&path, b"a\0b").unwrap();
     assert!(matches!(file::load(&path), Err(Error::Unreadable)));
 }
+
+#[test]
+fn saving_text_already_on_disk_succeeds_without_a_conflict() {
+    let folder = folder();
+    let path = folder.path().join("a.txt");
+    fs::write(&path, "old").unwrap();
+    let loaded = file::load(&path).unwrap();
+    fs::write(&path, "new").unwrap();
+    let saved = file::save(&path, &loaded, "new", false).unwrap();
+    assert_eq!(saved.text, "new");
+}

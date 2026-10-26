@@ -9,4 +9,4 @@ mod view;
 
 pub(crate) use diff::{CommitId, lockfile, push_clean};
 pub(crate) use error::Error;
-pub(crate) use view::{Agent, Review, agent_in, styled_code};
+pub(crate) use view::{Agent, Review, agent_in, token_colour};

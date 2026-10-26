@@ -169,6 +169,19 @@ pub(super) fn tab_label(title: &str) -> SharedString {
     }
 }
 
+impl HerdrWindow {
+    /// The label a tab's strip shows: its title, marked while a code tab
+    /// holds unsaved edits, as editors mark them.
+    pub(super) fn page_label(&self, tab: &super::Tab, cx: &App) -> SharedString {
+        let label = tab_label(&tab.title);
+        if self.unsaved_code_edits(tab.id, cx) {
+            format!("\u{25cf} {label}").into()
+        } else {
+            label
+        }
+    }
+}
+
 pub(super) fn store(cx: &App) -> Option<&Store> {
     cx.try_global::<Store>()
 }

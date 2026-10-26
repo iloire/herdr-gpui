@@ -3,7 +3,7 @@
 //! never comes through here: it arrives from the platform input API
 //! (`input`), so input methods and dead keys compose as they do elsewhere.
 
-use super::{CodeEditor, Event};
+use super::CodeEditor;
 use crate::actions;
 use gpui::{ClipboardItem, Context, KeyDownEvent, Window};
 
@@ -128,10 +128,9 @@ impl CodeEditor {
                 "delete" if !shift => self.buffer.delete_to(self.buffer.next(cursor)),
                 "enter" if !shift => self.buffer.newline(),
                 "tab" if !shift => self.buffer.insert(self.indent),
-                "escape" if !shift => {
-                    cx.emit(Event::Done);
-                    cx.stop_propagation();
-                    return;
+                "escape" if !shift && !selection.is_empty() => {
+                    self.buffer.select_to(cursor, false);
+                    false
                 }
                 _ => return,
             }

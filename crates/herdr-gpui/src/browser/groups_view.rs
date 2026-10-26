@@ -235,7 +235,7 @@ impl HerdrWindow {
         };
         store
             .in_workspace(&scope, &workspace)
-            .map(|tab| (Pick::Page(tab.id), super::view::tab_label(&tab.title)))
+            .map(|tab| (Pick::Page(tab.id), self.page_label(tab, cx)))
             .collect()
     }
 

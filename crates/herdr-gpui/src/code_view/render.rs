@@ -1,7 +1,7 @@
-//! A code tab paints the read file and its outline; reading lives elsewhere.
+//! A code tab draws its editor beside the file's outline, under a header
+//! naming the file; reading and editing live elsewhere.
 
-use super::{CodeView, State, Text};
-use crate::fonts::StyledFont;
+use super::{CodeView, Outline};
 use crate::{
     HerdrWindow,
     browser::{Slot, Tab, TabId},
@@ -36,53 +36,7 @@ impl HerdrWindow {
         self.config.terminal.line_height().max(14.)
     }
 
-    fn code_row(
-        &self,
-        id: TabId,
-        view: &CodeView,
-        text: &Text,
-        row: usize,
-        gutter: f32,
-        cx: &mut Context<Self>,
-    ) -> Stateful<Div> {
-        let theme = &self.theme;
-        let line = u32::try_from(row + 1).unwrap_or(u32::MAX);
-        let spans = view.spans.get(row).map_or(&[][..], Vec::as_slice);
-        div()
-            .id(row)
-            .debug_selector(move || format!("code-line-{row}"))
-            .h(px(self.code_line_height()))
-            .flex()
-            .items_center()
-            .whitespace_nowrap()
-            .when(view.marked == Some(line), |row| row.bg(rgb(theme.active)))
-            .child(
-                div()
-                    .flex_none()
-                    .w(px(gutter))
-                    .pr(px(12.))
-                    .flex()
-                    .justify_end()
-                    .text_color(rgb(theme.muted))
-                    .child(line.to_string()),
-            )
-            .child(crate::review::styled_code(
-                theme,
-                text.line(row),
-                spans,
-                &[],
-                None,
-                None,
-            ))
-            .on_click(cx.listener(move |this, _, _, cx| {
-                if let Some(view) = this.code_views.get_mut(&id) {
-                    view.marked = Some(line);
-                    cx.notify();
-                }
-            }))
-    }
-
-    fn code_outline(&self, id: TabId, text: &Text, cx: &mut Context<Self>) -> Div {
+    fn code_outline(&self, id: TabId, outline: &Outline, cx: &mut Context<Self>) -> Div {
         let theme = &self.theme;
         div()
             .flex_none()
@@ -97,20 +51,23 @@ impl HerdrWindow {
                     .px(px(10.))
                     .py(px(6.))
                     .text_color(rgb(theme.muted))
-                    .child(format!("Outline \u{00b7} {}", text.outline.len())),
+                    .child(format!("Outline \u{00b7} {}", outline.entries.len())),
             )
             .child(
                 uniform_list(
                     "code-outline",
-                    text.outline.len(),
+                    outline.entries.len(),
                     cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
-                        let Some(text) = this.code_views.get(&id).and_then(CodeView::text) else {
+                        let Some(outline) = this
+                            .code_views
+                            .get(&id)
+                            .and_then(|view| view.outline.clone())
+                        else {
                             return Vec::new();
                         };
-                        let text = text.clone();
                         range
                             .filter_map(|index| {
-                                let entry = text.outline.get(index)?;
+                                let entry = outline.entries.get(index)?;
                                 let line = entry.line;
                                 Some(
                                     div()
@@ -135,10 +92,13 @@ impl HerdrWindow {
                                                 .text_color(rgb(this.theme.muted))
                                                 .child(entry.kind.label()),
                                         )
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            if let Some(view) = this.code_views.get_mut(&id) {
-                                                view.go_to(line);
-                                                cx.notify();
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            if let Some(view) = this.code_views.get(&id) {
+                                                let focus = view.focus.clone();
+                                                view.editor.update(cx, |editor, cx| {
+                                                    editor.go_to_line(line, cx);
+                                                });
+                                                window.focus(&focus, cx);
                                             }
                                         })),
                                 )
@@ -188,14 +148,9 @@ impl HerdrWindow {
                     .child(path),
             )
             .children(self.code_edit_header(id, view, cx))
-            .when(view.editing.is_none(), |header| {
-                header.child(button("Edit", "code-edit").on_click(
-                    cx.listener(move |this, _, window, cx| this.edit_code_view(id, window, cx)),
-                ))
-            })
             .child(
                 button(
-                    if view.outline {
+                    if view.show_outline {
                         "Hide Outline"
                     } else {
                         "Outline"
@@ -204,107 +159,21 @@ impl HerdrWindow {
                 )
                 .on_click(cx.listener(move |this, _, _, cx| {
                     if let Some(view) = this.code_views.get_mut(&id) {
-                        view.outline = !view.outline;
+                        view.show_outline = !view.show_outline;
                         cx.notify();
                     }
                 })),
             )
-            .when(
-                view.editing.is_none() && self.markdown_toggles(id, cx),
-                |header| {
-                    header.child(button("Preview", "code-markdown-preview").on_click(
-                        cx.listener(move |this, _, window, cx| {
-                            this.toggle_markdown(id, window, cx)
-                        }),
-                    ))
-                },
-            )
+            .when(self.markdown_toggles(id, cx), |header| {
+                header.child(button("Preview", "code-markdown-preview").on_click(
+                    cx.listener(move |this, _, window, cx| this.toggle_markdown(id, window, cx)),
+                ))
+            })
             .child(
                 button("Open in Editor", "code-open-editor").on_click(
                     cx.listener(move |this, _, _, cx| this.open_code_view_in_editor(id, cx)),
                 ),
             )
-    }
-
-    fn render_code(&self, id: TabId, tab: &Tab, cx: &mut Context<Self>) -> AnyElement {
-        let theme = &self.theme;
-        let Some(view) = self.code_views.get(&id) else {
-            return div().into_any_element();
-        };
-        let body = match &view.state {
-            State::Loading => div()
-                .p_3()
-                .text_color(rgb(theme.muted))
-                .child("Reading file\u{2026}")
-                .into_any_element(),
-            State::Failed(error) => div()
-                .debug_selector(|| "code-error".into())
-                .p_3()
-                .text_color(crate::menu::danger(theme))
-                .child(error.clone())
-                .into_any_element(),
-            _ if view.editing.is_some() => view
-                .editing
-                .as_ref()
-                .map(|editing| {
-                    div()
-                        .flex_1()
-                        .min_h_0()
-                        .flex()
-                        .child(editing.editor.clone())
-                        .into_any_element()
-                })
-                .unwrap_or_else(|| div().into_any_element()),
-            State::Loaded(text) => {
-                let digits = text.lines.len().max(1).ilog10() + 1;
-                let gutter = (digits as f32 + 2.) * self.config.terminal.size * 0.62;
-                let outline = view.outline
-                    && !text.outline.is_empty()
-                    && view.width.get() >= OUTLINE_MIN_TAB_WIDTH;
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .flex()
-                    .text_font(&self.config.terminal)
-                    .text_size(px(self.config.terminal.size))
-                    .child(
-                        uniform_list(
-                            "code-lines",
-                            text.lines.len(),
-                            cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
-                                let Some(view) = this.code_views.get(&id) else {
-                                    return Vec::new();
-                                };
-                                let Some(text) = view.text().cloned() else {
-                                    return Vec::new();
-                                };
-                                range
-                                    .map(|row| this.code_row(id, view, &text, row, gutter, cx))
-                                    .collect()
-                            }),
-                        )
-                        .with_width_from_item(Some(text.widest))
-                        .with_horizontal_sizing_behavior(
-                            ListHorizontalSizingBehavior::Unconstrained,
-                        )
-                        .track_scroll(&view.scroll)
-                        .flex_1()
-                        .min_w_0(),
-                    )
-                    .when(outline, |row| row.child(self.code_outline(id, text, cx)))
-                    .into_any_element()
-            }
-        };
-        div()
-            .debug_selector(|| "code-view".into())
-            .relative()
-            .size_full()
-            .flex()
-            .flex_col()
-            .child(measure(view.width.clone()))
-            .child(self.code_header(id, tab, view, cx))
-            .child(body)
-            .into_any_element()
     }
 
     /// A code tab, drawn in `slot` where a page would be.
@@ -321,33 +190,37 @@ impl HerdrWindow {
                 .size_full()
                 .into_any_element();
         };
-        let focus = view.focus.clone();
+        let look = self.code_look();
+        view.editor
+            .update(cx, |editor, cx| editor.set_look(look, cx));
+        let outline = view
+            .outline
+            .as_ref()
+            .filter(|outline| {
+                view.show_outline
+                    && !outline.entries.is_empty()
+                    && view.width.get() >= OUTLINE_MIN_TAB_WIDTH
+            })
+            .map(|outline| self.code_outline(id, outline, cx));
         div()
             .id(SharedString::from(slot.selector("code-tab")))
+            .debug_selector(|| "code-view".into())
+            .relative()
             .size_full()
             .min_w_0()
+            .flex()
+            .flex_col()
             .bg(rgb(self.theme.background))
-            .track_focus(&focus)
-            // The tab holds the keyboard while used, so typing never
-            // reaches a terminal in another group.
-            .on_mouse_down(
-                MouseButton::Left,
-                cx.listener(move |this, _, window, cx| {
-                    if let Some(view) = this.code_views.get(&id) {
-                        window.focus(&view.focus, cx);
-                    }
-                }),
+            .child(measure(view.width.clone()))
+            .child(self.code_header(id, tab, view, cx))
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .child(div().flex_1().min_w_0().child(view.editor.clone()))
+                    .children(outline),
             )
-            .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
-                let focused = this
-                    .code_views
-                    .get(&id)
-                    .is_some_and(|view| view.focus.is_focused(window));
-                if focused && this.code_view_key(id, event, window, cx) {
-                    cx.stop_propagation();
-                }
-            }))
-            .child(self.render_code(id, tab, cx))
             .into_any_element()
     }
 }

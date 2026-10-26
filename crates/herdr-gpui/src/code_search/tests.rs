@@ -227,10 +227,10 @@ fn a_symbol_opens_in_the_editor_or_a_code_tab(cx: &mut TestAppContext) {
         })
     });
     cx.run_until_parked();
-    view.read_with(cx, |view, _| {
+    view.read_with(cx, |view, cx| {
         assert!(view.menu.code_search.is_none());
         let code = view.code_views.values().next().unwrap();
-        assert_eq!(code.shown(), (Some(1), Some(3)));
+        assert_eq!(code.shown(cx), (1, Some(3)));
     });
 }
 
