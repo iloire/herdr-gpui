@@ -300,7 +300,18 @@ impl HerdrWindow {
                             .font_weight(FontWeight::SEMIBOLD)
                             .child(card.name.clone()),
                     )
-                    .child(super::view::branch_line(look, card)),
+                    .child(super::view::branch_line(look, card))
+                    // What runs here, under the branch, so it is seen
+                    // without opening the folder's Home.
+                    .when_some(self.folder_ports(look, card, cx), |column, ports| {
+                        let selector = format!("folder-ports-{}", card.workspace);
+                        column.child(
+                            div()
+                                .debug_selector(move || selector.clone())
+                                .text_size(look.small())
+                                .child(ports),
+                        )
+                    }),
             )
             .when_some(card.host.clone(), |row, host| {
                 row.child(host_chip(look, host))

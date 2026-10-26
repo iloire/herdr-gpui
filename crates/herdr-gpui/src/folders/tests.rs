@@ -5,6 +5,7 @@ mod edge_bar;
 mod new_button;
 mod page;
 mod parts;
+mod ports;
 mod resize;
 mod status_icons;
 

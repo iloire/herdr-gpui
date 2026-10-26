@@ -298,8 +298,22 @@ impl HerdrWindow {
     }
 
     fn home_ports(&self, look: &Look, card: &Card, cx: &mut Context<Self>) -> Stateful<Div> {
-        let ports = self
-            .endpoints
+        let body = match self.folder_ports(look, card, cx) {
+            Some(ports) => ports.into_any_element(),
+            None => quiet(look, "No ports open").into_any_element(),
+        };
+        panel(look, "folder-home-ports", "Running here", None).child(body)
+    }
+
+    /// The ports listening in the folder's workspace, as chips that open
+    /// them, when the port monitor found any: on its Home and its row.
+    pub(super) fn folder_ports(
+        &self,
+        look: &Look,
+        card: &Card,
+        cx: &mut Context<Self>,
+    ) -> Option<Div> {
+        self.endpoints
             .get(card.endpoint_index)
             .and_then(|endpoint| crate::listening_ports::Daemon::of(&endpoint.connection.target))
             .filter(|_| self.config.show_listening_ports)
@@ -313,12 +327,7 @@ impl HerdrWindow {
                     look.ui.size - 1.,
                     cx,
                 )
-            });
-        let body = match ports {
-            Some(ports) => ports.into_any_element(),
-            None => quiet(look, "No ports open").into_any_element(),
-        };
-        panel(look, "folder-home-ports", "Running here", None).child(body)
+            })
     }
 }
 

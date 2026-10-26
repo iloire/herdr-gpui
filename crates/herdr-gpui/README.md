@@ -2262,7 +2262,8 @@ window at once, and `herdr-gpui ui panel NAME` shows a section.
   counts what needs you.
 - **Folders** lists every open workspace on every connected host, in the
   sidebar's order, with its branch, uncommitted files, and agent, and a bar
-  of its own color down its left edge. Drag a folder to reorder it among its
+  of its own color down its left edge; the ports listening in it show
+  under its branch, each opening in a click. Drag a folder to reorder it among its
   host's folders: the move goes to Herdr, so the sidebar and every other
   client follow, and Escape drops it back where it was. The folder picked
   unfolds into **Terminals**, **Changes**, and **Files**, and each folder
