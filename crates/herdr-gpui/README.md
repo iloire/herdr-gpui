@@ -1071,11 +1071,14 @@ placement** in **Settings > Sidebar**, to list each agent under the workspace
 it runs in instead; Spaces then takes the full sidebar height. The collapsed
 rail keeps its own agents section either way.
 
-A search field at the top of the sidebar finds devices, worktrees, and
-branches by name; while it holds text, results grouped by kind replace the
-spaces list. Up and Down move through them, Enter opens one, and Escape
-clears the search. Set top-level `show_sidebar_search = false`, or turn off
-**Show search** in **Settings > Sidebar**, to hide it.
+The Spaces heading at the top of the sidebar is its search field: it looks
+like a heading with a magnifier at its edge, and a click on it lets you search
+devices, worktrees, branches, and worktree notes. While it holds text, results
+grouped by kind replace the spaces list; Up and Down move through them, Enter
+opens one, and Escape clears the search. In the Devices layout the Devices
+heading works the same way and narrows the tree in place. Set top-level
+`show_sidebar_search = false`, or turn off **Show search** in **Settings >
+Sidebar**, to hide it.
 
 In the Normal, Compact, and Comfortable layouts and in Superset, each space's
 sidebar row starts with its repository owner's avatar, or the GitHub mark;

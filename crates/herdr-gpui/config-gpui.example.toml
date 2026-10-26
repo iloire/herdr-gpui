@@ -64,8 +64,10 @@ show_agents_header = true
 # section below Spaces, or "nested", under the workspace each one runs in.
 # Also under Settings > Sidebar.
 agents_placement = "panel"
-# Show the search field at the top of the sidebar, which finds devices,
-# worktrees, and branches. Also under Settings > Sidebar.
+# Make the Spaces heading at the top of the sidebar its search field: click it
+# to search devices, worktrees, branches, and worktree notes (in the Devices
+# layout, the Devices heading narrows the tree in place). Also under
+# Settings > Sidebar.
 show_sidebar_search = true
 # Show the repository owner's avatar, or the GitHub mark, before each space's
 # name in the sidebar, in the layouts that draw one (not orca or minimal).

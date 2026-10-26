@@ -166,7 +166,7 @@ pub(super) const CATALOG: &[Entry] = &[
         Section::Sidebar,
         "sidebar-show-search",
         "Show search",
-        "The search field above the workspaces.",
+        "Click the Spaces heading to search devices, worktrees, branches, and notes.",
     ),
     entry(
         Section::Sidebar,

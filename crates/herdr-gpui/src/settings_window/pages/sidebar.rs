@@ -368,7 +368,7 @@ impl SettingsWindow {
             )
             .child(
                 ui::row(theme, "sidebar-show-search", "Show search")
-                    .description("The search field above the workspaces.")
+                    .description("Click the Spaces heading to search devices, worktrees, branches, and notes.")
                     .switch(self.preference_toggle(
                         "sidebar-show-search-toggle",
                         self.config.show_sidebar_search,
