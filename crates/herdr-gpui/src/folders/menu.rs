@@ -51,12 +51,11 @@ impl FolderMenu {
     }
 
     pub(super) fn actions(&self) -> Vec<Action> {
-        let mut actions = vec![Action::CopyPath];
         #[cfg(any(target_os = "macos", target_os = "linux"))]
         if self.local {
-            actions.push(Action::OpenFolder);
+            return vec![Action::CopyPath, Action::OpenFolder];
         }
-        actions
+        vec![Action::CopyPath]
     }
 }
 
