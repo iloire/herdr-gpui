@@ -128,10 +128,11 @@ impl HerdrWindow {
                 )
                 .on_drag(DiffThumb, |_, _, _, cx| cx.new(|_| EmptyView))
         });
-        // The halves split the list's width, as it last laid out.
+        // The halves split the cards' width, as the list last laid out.
         let split = self.reviews.get(&id).and_then(|review| {
             let width = review.scroll.viewport_bounds().size.width;
-            (review.layout == Layout::Split && width > px(0.)).then(|| width * review.split_ratio)
+            (review.layout == Layout::Split && width > px(0.))
+                .then(|| super::card::split_x(width, review.split_ratio))
         });
         let split = split.map(|x| {
             divider(

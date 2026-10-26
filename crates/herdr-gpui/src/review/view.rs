@@ -20,6 +20,7 @@ use std::{
 };
 
 mod base_menu;
+mod card;
 mod colours;
 pub(crate) use rows::token_colour;
 mod file_rows;

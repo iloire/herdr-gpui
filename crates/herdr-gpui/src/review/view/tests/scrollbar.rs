@@ -21,14 +21,16 @@ fn a_long_diff_has_a_thumb_that_drags_it(cx: &mut gpui::TestAppContext) {
     // The list lays out once before its handle knows how far it scrolls.
     draw(cx);
     draw(cx);
-    let area = cx.debug_bounds("review-header-0").unwrap();
+    // The first file's card opens just under the list's top.
+    let header = cx.debug_bounds("review-header-0").unwrap();
+    let review = cx.debug_bounds("review").unwrap();
     let thumb = cx.debug_bounds("review-scroll-thumb").unwrap();
     assert!(
-        (thumb.top() - area.top()).abs() < gpui::px(1.),
+        thumb.top() <= header.top() && header.top() - thumb.top() < gpui::px(10.),
         "starts at the top"
     );
     assert!(thumb.size.height < gpui::px(200.), "a share of the list");
-    assert!(thumb.right() <= area.right());
+    assert!(thumb.right() <= review.right());
 
     // Dragging the thumb to the bottom scrolls to the end of the diff.
     let scrolled = cx.update(|_, cx| {

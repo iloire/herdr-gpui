@@ -228,8 +228,15 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         self.prepare_review_row(id, position, cx);
-        self.render_review_item(id, position, line_height, cx)
-            .unwrap_or_else(|| div().h(px(line_height)).into_any_element())
+        let edges = self
+            .reviews
+            .get(&id)
+            .map(|review| review.edges(position))
+            .unwrap_or_default();
+        let row = self
+            .render_review_item(id, position, line_height, cx)
+            .unwrap_or_else(|| div().h(px(line_height)).into_any_element());
+        super::card::frame(&self.theme, row, edges).into_any_element()
     }
 
     /// Asks for what the row at `position` needs before it is drawn: its
@@ -542,11 +549,10 @@ impl HerdrWindow {
         let Some(review) = self.reviews.get_mut(&id) else {
             return false;
         };
-        let width = f32::from(bounds.size.width);
-        if width <= 0. {
+        let Some(ratio) = super::card::split_ratio(x - bounds.left(), bounds.size.width) else {
             return false;
-        }
-        let ratio = (f32::from(x - bounds.left()) / width).clamp(MIN_SIDE, 1. - MIN_SIDE);
+        };
+        let ratio = ratio.clamp(MIN_SIDE, 1. - MIN_SIDE);
         if (ratio - review.split_ratio).abs() < f32::EPSILON {
             return false;
         }

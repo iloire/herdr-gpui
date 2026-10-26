@@ -111,7 +111,13 @@ impl HerdrWindow {
             .flex()
             .items_start()
             .gap_1()
+            .py_1()
             .pr_2()
+            // The card's top; a folded file's header is its bottom too.
+            .rounded_t(px(super::card::RADIUS - 1.))
+            .when(entry.folded, |header| {
+                header.rounded_b(px(super::card::RADIUS - 1.))
+            })
             .bg(rgb(theme.active))
             .when(review.draft == Some(row), |header| {
                 header.bg(rgb(theme.surface))
