@@ -73,12 +73,17 @@ fn files_shows_only_files_beside_the_tree(cx: &mut gpui::TestAppContext) {
     };
     assert_eq!(terminals(cx), 2, "Terminals lists them");
     assert!(bounds(cx, "terminal").is_some());
+    assert!(bounds(cx, "tab-t0").is_some(), "the strip draws them");
     click(cx, "folder-part-files");
     assert!(
         cx.update(|_, cx| view.read(cx).files_view()),
         "file tabs list here"
     );
     assert_eq!(terminals(cx), 0, "Files lists none");
+    assert!(
+        bounds(cx, "tab-t0").is_none(),
+        "nor does the strip draw one"
+    );
     let list = bounds(cx, "folders-list").unwrap();
     let tree = bounds(cx, "files").unwrap();
     let prompt = bounds(cx, "stand-in").unwrap();

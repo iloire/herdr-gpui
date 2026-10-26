@@ -281,6 +281,9 @@ impl HerdrWindow {
     /// Whether `group`'s strip lists `pick`; see [`Layout::lists`]. A tab
     /// this window hides is listed only while the group shows it.
     pub(crate) fn group_lists(&self, group: GroupId, pick: &Pick) -> bool {
+        if self.left_out_of_files(pick) {
+            return false;
+        }
         if self.hides_tab(pick) && self.shown_pick(group).as_ref() != Some(pick) {
             return false;
         }
@@ -320,11 +323,9 @@ impl HerdrWindow {
     /// group shows it.
     fn workspace_tabs(&self, cx: &App) -> Vec<Pick> {
         let slots = self.group_slots();
-        let files_only = self.files_only();
         self.open_workspace_tabs(cx)
             .into_iter()
-            // A folder's Files lists no terminals, even one a group shows.
-            .filter(|pick| !(files_only && matches!(pick, Pick::Herdr(_))))
+            .filter(|pick| !self.left_out_of_files(pick))
             .filter(|pick| {
                 !self.hides_tab(pick)
                     || slots
@@ -517,8 +518,9 @@ impl HerdrWindow {
         let focused = |group| self.group_focused_tab(group);
         let shown = layout.shown(group, focused);
         match &shown {
-            // A folder's Files shows no terminal: its groups wait for a file.
+            // A folder's Files shows only files: its other groups wait for one.
             Shown::Terminal | Shown::Elsewhere(_) if self.files_only() => Shown::Empty,
+            Shown::Page(id) if self.left_out_of_files(&Pick::Page(*id)) => Shown::Empty,
             Shown::Page(id) if store(cx).is_none_or(|store| store.get(*id).is_none()) => {
                 Shown::Empty
             }

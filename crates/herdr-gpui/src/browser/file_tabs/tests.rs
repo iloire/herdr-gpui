@@ -73,7 +73,7 @@ fn file_tabs_stay_in_a_folders_files(cx: &mut TestAppContext) {
 }
 
 #[gpui::test]
-fn a_page_an_agent_opened_stays_in_every_view(cx: &mut TestAppContext) {
+fn a_page_an_agent_opened_stays_with_the_terminals(cx: &mut TestAppContext) {
     let dir = tempfile::Builder::new().prefix("plans").tempdir().unwrap();
     let path = dir.path().join("plan.md");
     std::fs::write(&path, "# Plan\n").unwrap();
@@ -97,5 +97,19 @@ fn a_page_an_agent_opened_stays_in_every_view(cx: &mut TestAppContext) {
         id
     });
     show(&view, cx, ActivityPanel::Workspaces);
+    assert!(listed(&view, id, cx).0);
+    // A folder's Files lists only the files opened from its tree; the page
+    // waits under Terminals, with the agent that opened it.
+    files(&view, cx);
+    assert!(!listed(&view, id, cx).0);
+    view.read_with(cx, |view, cx| {
+        let group = view.active_group().unwrap();
+        assert_eq!(view.group_shown(group, cx), crate::browser::Shown::Empty);
+    });
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_shown_folder(crate::folders::Part::Terminals, window, cx)
+        })
+    });
     assert!(listed(&view, id, cx).0);
 }

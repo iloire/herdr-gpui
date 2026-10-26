@@ -4,7 +4,9 @@
 //! keeps its open files apart from its terminals. Leaving Files turns each
 //! group off the file it showed, and coming back shows it again. Pages an
 //! agent opened stay in every view: they are the agent's hand-off, not the
-//! user's browsing. Only this window's strips change; no tab closes.
+//! user's browsing. A folder's Files is the other way round: it lists only
+//! file tabs, its terminals and agents' pages waiting under Terminals.
+//! Only this window's strips change; no tab closes.
 
 use super::{Location, Pick, Store, Tab, TabId, layouts::Key};
 use crate::HerdrWindow;
@@ -51,6 +53,13 @@ impl HerdrWindow {
             self.browser.file_tabs.ids = ids;
             cx.notify();
         }
+    }
+
+    /// Whether a folder's Files leaves `pick` out: it lists only the files
+    /// opened from the tree, no terminal and no page an agent opened, even
+    /// one a group shows.
+    pub(crate) fn left_out_of_files(&self, pick: &Pick) -> bool {
+        self.files_only() && !self.browser.file_tabs.holds(pick)
     }
 
     /// Whether this window's strips leave out file tabs now.
