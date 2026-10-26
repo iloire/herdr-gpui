@@ -9,6 +9,8 @@ use crate::{
 use gpui::{Entity, TestAppContext, VisualTestContext};
 use std::sync::Arc;
 
+mod opening;
+
 fn window(cx: &mut TestAppContext) -> (Entity<HerdrWindow>, &mut VisualTestContext) {
     cx.add_window_view(|window, cx| {
         let mut view = crate::sidebar::layout_tests::fixture_window(window, cx);

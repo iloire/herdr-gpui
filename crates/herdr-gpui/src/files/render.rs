@@ -315,7 +315,7 @@ impl HerdrWindow {
 
     /// Opens `path`, relative to the shown checkout, in a code tab, or with
     /// `in_editor` in the terminal editor beside the focused pane.
-    fn open_files_entry(
+    pub(crate) fn open_files_entry(
         &mut self,
         path: &str,
         in_editor: bool,
@@ -337,6 +337,9 @@ impl HerdrWindow {
         } else {
             self.open_code_view(&target, window, cx);
         }
+        // Counted now, not at the next tick: until then the folder's Files
+        // would leave the new tab out, and its group would forget it.
+        self.sync_file_tabs(cx);
         cx.notify();
     }
 }

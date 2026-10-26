@@ -35,13 +35,19 @@ fn index(changed: &[usize]) -> Index {
         .with_changes(changed.iter().copied().map(change).collect())
 }
 
-fn listing(changed: &[usize]) -> Listing {
-    let index = index(changed);
-    let tree = Tree::new(&index);
-    Listing {
-        index: Arc::new(index),
-        tree: Arc::new(tree),
+impl Listing {
+    /// `index` laid out as a read would.
+    pub(crate) fn of(index: Index) -> Self {
+        let tree = Tree::new(&index);
+        Self {
+            index: Arc::new(index),
+            tree: Arc::new(tree),
+        }
     }
+}
+
+fn listing(changed: &[usize]) -> Listing {
+    Listing::of(index(changed))
 }
 
 /// The shown rows as indented paths.
