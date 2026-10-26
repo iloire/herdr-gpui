@@ -38,7 +38,7 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, Instant},
 };
 
 /// How often to read again while the section is shown.
@@ -111,46 +111,22 @@ pub(crate) struct Read {
     pub(crate) failed: Vec<Failed>,
 }
 
-/// The section's state in a window.
+/// The reads' state in a window.
+#[derive(Default)]
 pub(crate) struct Changes {
     read: Read,
-    /// When the last read finished, for "Updated … ago".
-    read_at: Option<SystemTime>,
     /// When the next read is due; `None` reads at the next tick.
     next: Option<Instant>,
     task: Option<Task<()>>,
     /// What the last read was asked for, so a workspace opened, a pane
     /// moved to another folder, or the config changed reads again at once.
     targets: Targets,
-    /// Whether clean checkouts are listed too.
-    pub(crate) all: bool,
     /// Tells a read in flight to stop when the window goes.
     cancelled: Arc<AtomicBool>,
     /// Checkouts whose generated and binary files are listed one by one.
     noise_shown: HashSet<String>,
-    /// What the review beside the list shows, and the handle the list
-    /// holds the keyboard with once clicked.
+    /// What the review beside the list shows.
     picked: Option<pane::Pick>,
-    focus: Option<FocusHandle>,
-    scroll: ScrollHandle,
-}
-
-impl Default for Changes {
-    fn default() -> Self {
-        Self {
-            read: Read::default(),
-            read_at: None,
-            next: None,
-            task: None,
-            targets: Targets::default(),
-            all: false,
-            cancelled: Arc::default(),
-            noise_shown: HashSet::new(),
-            picked: None,
-            focus: None,
-            scroll: ScrollHandle::new(),
-        }
-    }
 }
 
 impl Drop for Changes {
@@ -164,39 +140,6 @@ impl Changes {
         &self.read.repos
     }
 
-    pub(crate) fn failed(&self) -> &[Failed] {
-        &self.read.failed
-    }
-
-    pub(crate) fn read_at(&self) -> Option<SystemTime> {
-        self.read_at
-    }
-
-    pub(crate) fn busy(&self) -> bool {
-        self.task.is_some()
-    }
-
-    /// Checkouts with uncommitted work: the bar's count.
-    pub(crate) fn dirty(&self) -> usize {
-        self.read
-            .repos
-            .iter()
-            .flat_map(|repo| &repo.checkouts)
-            .filter(|shown| shown.checkout.dirty())
-            .count()
-    }
-
-    /// Checkouts that ask nothing of the user, folded away unless All is
-    /// picked.
-    pub(crate) fn clean(&self) -> usize {
-        self.read
-            .repos
-            .iter()
-            .flat_map(|repo| &repo.checkouts)
-            .filter(|shown| shown.rank() == Rank::Clean)
-            .count()
-    }
-
     /// Reads again at the next tick.
     pub(crate) fn refresh(&mut self) {
         self.next = None;
@@ -206,9 +149,18 @@ impl Changes {
         self.task.is_none() && self.next.is_none_or(|next| now >= next)
     }
 
-    fn install(&mut self, read: Read, next: Instant, at: SystemTime) {
+    /// Keeps what a pass read; a checkout or folder it could not read is
+    /// logged, as Folders shows only what it found.
+    fn install(&mut self, read: Read, next: Instant) {
+        for failed in &read.failed {
+            tracing::warn!(
+                category = "changes_read",
+                label = %failed.label,
+                error = %failed.error,
+                "Cannot read a checkout"
+            );
+        }
         self.read = read;
-        self.read_at = Some(at);
         self.next = Some(next);
         self.task = None;
     }
@@ -217,7 +169,7 @@ impl Changes {
     #[cfg(test)]
     pub(crate) fn read_for_test(&mut self, read: Read) {
         let now = Instant::now();
-        self.install(read, now + HIDDEN, SystemTime::now());
+        self.install(read, now + HIDDEN);
     }
 }
 
@@ -269,11 +221,10 @@ pub(crate) fn repo_name(common_dir: &str) -> String {
 }
 
 impl HerdrWindow {
-    /// Whether the bar lists Changes, so there is a count to keep, or
-    /// Folders, as a page or a column, shows what the reads find.
+    /// Whether the reads are kept: the bar shows Folders, whose cards and
+    /// the status bar's checkout count read them.
     fn changes_wanted(&self) -> bool {
         self.activity_bar_shown()
-            && (self.activity_panel_listed(ActivityPanel::Changes) || self.folders_on_screen())
     }
 
     fn folders_on_screen(&self) -> bool {
@@ -338,9 +289,7 @@ impl HerdrWindow {
             self.changes.refresh();
         }
         let now = Instant::now();
-        let interval = if self.activity_section() == Some(ActivityPanel::Changes)
-            || self.folders_on_screen()
-        {
+        let interval = if self.folders_on_screen() {
             SHOWN
         } else {
             HIDDEN
@@ -350,7 +299,6 @@ impl HerdrWindow {
         if self.changes.next.is_some_and(|next| next > now + interval) {
             self.changes.next = Some(now);
         }
-        self.pick_first_change(cx);
         if !self.changes.due(now) {
             return;
         }
@@ -361,9 +309,7 @@ impl HerdrWindow {
         self.changes.task = Some(cx.spawn(async move |this, cx| {
             let read = work.await;
             let _ = this.update(cx, |this, cx| {
-                this.changes
-                    .install(read, Instant::now() + interval, SystemTime::now());
-                this.pick_first_change(cx);
+                this.changes.install(read, Instant::now() + interval);
                 cx.notify();
             });
         }));

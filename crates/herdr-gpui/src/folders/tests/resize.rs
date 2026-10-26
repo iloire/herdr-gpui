@@ -2,7 +2,6 @@
 //! them and gives the terminals the room they leave; a double-click goes
 //! back to the default.
 use super::page::{bounds, click, draw, fixture};
-use crate::sidebar::ActivityPanel;
 use gpui::{Modifiers, MouseButton, Pixels, VisualTestContext, point, px};
 
 pub(crate) fn drag(cx: &mut VisualTestContext, handle: &str, by: Pixels) {
@@ -58,35 +57,6 @@ fn the_list_and_tree_resize_and_the_terminals_take_the_room(cx: &mut gpui::TestA
     cx.simulate_mouse_up(edge, MouseButton::Left, Modifiers::default());
     draw(cx);
     assert_eq!(width(cx, "folders-list"), px(290.));
-}
-
-#[gpui::test]
-fn the_files_view_tree_resizes_with_the_same_width(cx: &mut gpui::TestAppContext) {
-    let (view, cx) = fixture(cx);
-    cx.update(|window, cx| {
-        view.update(cx, |view, cx| {
-            view.show_activity_panel(ActivityPanel::Files, window, cx)
-        })
-    });
-    draw(cx);
-    assert_eq!(width(cx, "files"), px(260.));
-    let terminal = bounds(cx, "terminal").unwrap().left();
-    drag(cx, "files-resize", px(80.));
-    assert!((width(cx, "files") - px(340.)).abs() <= px(4.));
-    let narrower = bounds(cx, "terminal").unwrap().left();
-    assert!(
-        (narrower - terminal - px(80.)).abs() <= px(6.),
-        "{terminal:?} {narrower:?}"
-    );
-    // A folder's Files shows the tree at the width dragged here.
-    cx.update(|window, cx| {
-        view.update(cx, |view, cx| {
-            view.show_activity_panel(ActivityPanel::Folders, window, cx)
-        })
-    });
-    draw(cx);
-    click(cx, "folder-part-files");
-    assert!((width(cx, "files") - px(340.)).abs() <= px(4.));
 }
 
 #[gpui::test]

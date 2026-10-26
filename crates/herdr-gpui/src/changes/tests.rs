@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
 use super::{
-    Changes, Rank, Read, Shown, Targets, Workspace, discover, group, rank, repo_name, section::age,
+    Rank, Read, Shown, Targets, Workspace, discover, group, rank, repo_name, section::age,
 };
 use herdr_vcs::changes::{Checkout, FileChange, Kind, Unmerged};
 use std::{path::Path, process::Command, time::Duration};
@@ -96,23 +96,6 @@ fn worktrees_group_under_their_repository_and_what_needs_work_leads() {
         .map(|shown| shown.checkout.path.as_str())
         .collect();
     assert_eq!(app, ["/code/app-feature", "/code/app"]);
-}
-
-#[test]
-fn the_bar_counts_dirty_checkouts_and_the_filter_counts_clean_ones() {
-    let mut changes = Changes::default();
-    assert_eq!((changes.dirty(), changes.clean()), (0, 0));
-    changes.read_for_test(Read {
-        repos: group(vec![
-            shown(dirty(checkout("/a", "/a/.git")), &["1"]),
-            shown(dirty(checkout("/a-2", "/a/.git")), &[]),
-            shown(checkout("/b", "/b/.git"), &["3"]),
-        ]),
-        failed: Vec::new(),
-    });
-    assert_eq!((changes.dirty(), changes.clean()), (2, 1));
-    changes.read_for_test(Read::default());
-    assert_eq!(changes.dirty(), 0);
 }
 
 #[test]
@@ -356,13 +339,11 @@ pub(super) fn window(
     });
     cx.update(|window, cx| {
         view.update(cx, |view, cx| {
-            view.show_activity_panel(crate::sidebar::ActivityPanel::Changes, window, cx);
-            view.pick_first_change(cx);
+            view.open_shown_folder(crate::folders::Part::Changes, window, cx);
         })
     });
     cx.run_until_parked();
     (view, cx)
 }
 
-mod resize;
 mod review;

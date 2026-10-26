@@ -1,6 +1,6 @@
-//! The review beside the list, as Git clients show it: the first item is
-//! picked when the section shows, a click or ↑ and ↓ show another in place,
-//! and nothing leaves the section or opens a tab.
+//! The review beside a folder's Changes, as Git clients show it: the first
+//! item is picked when the part shows, picking another shows it in place,
+//! and nothing leaves Folders or opens a tab.
 use super::*;
 use crate::{
     HerdrWindow,
@@ -52,13 +52,13 @@ fn showing(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) -> (Option<Pi
     })
 }
 
-fn step(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext, forward: bool) {
-    cx.update(|_, cx| view.update(cx, |view, cx| view.step_change(forward, cx)));
+fn pick(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext, pick: Pick) {
+    cx.update(|_, cx| view.update(cx, |view, cx| view.pick_change(pick, None, cx)));
     cx.run_until_parked();
 }
 
 #[gpui::test]
-fn the_list_shows_what_is_picked_beside_it_and_never_leaves(cx: &mut gpui::TestAppContext) {
+fn a_folders_changes_show_what_is_picked_beside_it_and_never_leave(cx: &mut gpui::TestAppContext) {
     let root = tempfile::tempdir().unwrap();
     let path = root.path().canonicalize().unwrap();
     let (shown, commits) = checkout_read(&path);
@@ -78,18 +78,13 @@ fn the_list_shows_what_is_picked_beside_it_and_never_leaves(cx: &mut gpui::TestA
         showing(&view, cx),
         (Some(Pick::Uncommitted(checkout.clone())), vec!["a".into()])
     );
-    // ↓ steps through the commits, newest first, and ↑ back.
-    step(&view, cx, true);
-    assert_eq!(
-        showing(&view, cx),
-        (Some(at(&commits[0])), vec!["second.rs".into()])
-    );
-    step(&view, cx, true);
+    // A commit picked shows its files in place.
+    pick(&view, cx, at(&commits[1]));
     assert_eq!(
         showing(&view, cx),
         (Some(at(&commits[1])), vec!["first.rs".into()])
     );
-    step(&view, cx, false);
+    pick(&view, cx, at(&commits[0]));
     assert_eq!(
         showing(&view, cx),
         (Some(at(&commits[0])), vec!["second.rs".into()])
@@ -97,7 +92,7 @@ fn the_list_shows_what_is_picked_beside_it_and_never_leaves(cx: &mut gpui::TestA
 
     // The section stays, and no tab was opened in a workspace.
     view.read_with(cx, |view, cx| {
-        assert_eq!(view.activity_section(), Some(ActivityPanel::Changes));
+        assert_eq!(view.activity_section(), Some(ActivityPanel::Folders));
         // No store at all means no tab was ever opened.
         let reviews = cx.try_global::<Store>().map_or(0, |store| {
             store

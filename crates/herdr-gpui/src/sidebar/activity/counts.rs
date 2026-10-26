@@ -16,7 +16,6 @@ use std::collections::HashSet;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) struct Counts {
     needs: Count,
-    changes: Count,
     pull_requests: Count,
     issues: Count,
     security: Count,
@@ -54,8 +53,7 @@ impl Counts {
     fn count(self, panel: ActivityPanel) -> Option<Count> {
         match panel {
             ActivityPanel::Overview => Some(self.needs),
-            ActivityPanel::Changes => Some(self.changes),
-            ActivityPanel::Files | ActivityPanel::Folders | ActivityPanel::Workspaces => None,
+            ActivityPanel::Folders | ActivityPanel::Workspaces => None,
             ActivityPanel::PullRequests => Some(self.pull_requests),
             ActivityPanel::Issues => Some(self.issues),
             ActivityPanel::Security => Some(self.security),
@@ -86,10 +84,6 @@ impl HerdrWindow {
             needs: Count {
                 items: self.overview_needing(),
                 latest: self.overview_needing_since().map(DateTime::from),
-            },
-            changes: Count {
-                items: self.changes.dirty(),
-                latest: None,
             },
             security: Count {
                 items: self.security.urgent(),

@@ -10,7 +10,6 @@ use crate::{
     config::{Theme, corners, mix},
     folder::home_relative,
     pull_request::Outcome,
-    sidebar::ActivityPanel,
 };
 use gpui::{prelude::*, *};
 use herdr_vcs::context::Context as Read;
@@ -242,9 +241,10 @@ impl HerdrWindow {
         )
     }
 
-    /// Makes `segment` open the Changes section, when the bar lists it.
+    /// Makes `segment` open the focused folder's Changes, when the bar
+    /// shows Folders.
     fn to_changes(&self, segment: Stateful<Div>, cx: &mut Context<Self>) -> Stateful<Div> {
-        if !self.activity_panel_listed(ActivityPanel::Changes) {
+        if !self.activity_bar_shown() {
             return segment;
         }
         let hover = self.theme.active;
@@ -252,7 +252,7 @@ impl HerdrWindow {
             .cursor_pointer()
             .hover(move |style| style.bg(rgb(hover)))
             .on_click(cx.listener(|this, _, window, cx| {
-                this.show_activity_panel(ActivityPanel::Changes, window, cx);
+                this.open_shown_folder(crate::folders::Part::Changes, window, cx);
             }))
     }
 }

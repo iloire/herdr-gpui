@@ -18,7 +18,6 @@
 
 use super::{SidebarMode, agents::Indicators, line_height};
 use crate::fonts::StyledFont;
-use crate::panel_resize::PanelDrag;
 use crate::{
     Command, HerdrWindow,
     orchestrator::{List, OrchestratorView, ViewId},
@@ -50,8 +49,6 @@ const BUSY_PULSE: std::time::Duration = std::time::Duration::from_millis(1600);
 fn label(panel: ActivityPanel) -> &'static str {
     match panel {
         ActivityPanel::Overview => "Overview",
-        ActivityPanel::Changes => "Changes",
-        ActivityPanel::Files => "Files",
         ActivityPanel::Folders => "Folders",
         ActivityPanel::Workspaces => "Workspaces",
         ActivityPanel::PullRequests => "Pull requests",
@@ -64,8 +61,6 @@ fn label(panel: ActivityPanel) -> &'static str {
 fn icon(panel: ActivityPanel) -> &'static str {
     match panel {
         ActivityPanel::Overview => "icons/pulse.svg",
-        ActivityPanel::Changes => "icons/git-branch.svg",
-        ActivityPanel::Files => "icons/file.svg",
         ActivityPanel::Folders => "icons/folder.svg",
         ActivityPanel::Workspaces => "icons/terminal.svg",
         ActivityPanel::PullRequests => "icons/pull-request.svg",
@@ -211,7 +206,6 @@ impl HerdrWindow {
         let style = &self.config.sidebar_style;
         match panel {
             ActivityPanel::Automations => style.automations,
-            ActivityPanel::Changes => style.changes,
             ActivityPanel::Issues => style.issues,
             ActivityPanel::PullRequests => style.pull_requests,
             ActivityPanel::Security => style.security,
@@ -224,7 +218,6 @@ impl HerdrWindow {
     pub(crate) fn activity_panel_key(panel: ActivityPanel) -> Option<&'static str> {
         match panel {
             ActivityPanel::Automations => Some("automations"),
-            ActivityPanel::Changes => Some("changes"),
             ActivityPanel::Issues => Some("issues"),
             ActivityPanel::PullRequests => Some("pull_requests"),
             ActivityPanel::Security => Some("security"),
@@ -274,20 +267,10 @@ impl HerdrWindow {
             && self.folders_beside_terminals()
     }
 
-    /// Whether the window is in the Files view, or a folder's Files, whose
-    /// strips list file tabs, whether or not the Files column is folded.
+    /// Whether the window shows a folder's Files, whose strips list file
+    /// tabs and its tree beside them.
     pub(crate) fn files_view(&self) -> bool {
-        self.activity_bar_leads()
-            && (self.activity_panel() == ActivityPanel::Files
-                || (self.folders_column() && self.folders_files()))
-    }
-
-    /// Whether the Files tree is on screen beside the terminals.
-    pub(crate) fn files_shown(&self) -> bool {
-        self.activity_bar_leads()
-            && ((self.activity_panel() == ActivityPanel::Files
-                && self.sidebar_mode() == SidebarMode::Expanded)
-                || (self.folders_column() && self.folders_files()))
+        self.folders_column() && self.folders_files()
     }
 
     /// The left column's width: the bar alone beside a section, else the
@@ -300,11 +283,7 @@ impl HerdrWindow {
         if self.folders_column() {
             return Some(BAR_WIDTH + self.folders_column_width());
         }
-        let width = if self.files_shown() {
-            Some(self.files_tree_width.width(self.viewport_width))
-        } else {
-            self.sidebar_mode().width(self.sidebar_width, window_width)
-        };
+        let width = self.sidebar_mode().width(self.sidebar_width, window_width);
         if !self.activity_bar_leads() {
             return width;
         }
@@ -355,7 +334,6 @@ impl HerdrWindow {
             Some(
                 ActivityPanel::Overview
                 | ActivityPanel::Folders
-                | ActivityPanel::Changes
                 | ActivityPanel::Security
                 | ActivityPanel::Automations,
             ) => {
@@ -380,10 +358,9 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let section = match self.activity_section()? {
-            ActivityPanel::Workspaces | ActivityPanel::Files => return None,
+            ActivityPanel::Workspaces => return None,
             ActivityPanel::Overview => self.render_overview(cx),
             ActivityPanel::Folders => self.render_folders(cx),
-            ActivityPanel::Changes => self.render_changes_section(cx),
             ActivityPanel::Security => self.render_security_section(window, cx),
             ActivityPanel::Automations => self.render_automations_section(cx),
             ActivityPanel::PullRequests | ActivityPanel::Issues => {
@@ -428,19 +405,7 @@ impl HerdrWindow {
             let row_height = line_height(&self.config.sidebar) + 4.;
             return column.child(self.render_folders_column(row_height, cx));
         }
-        let files = self.activity_panel() == ActivityPanel::Files;
         let sidebar = match self.sidebar_mode() {
-            SidebarMode::Expanded if files => self.resizable_panel(
-                self.render_files(
-                    self.files_tree_width.width(self.viewport_width),
-                    line_height(&self.config.sidebar) + 4.,
-                    cx,
-                ),
-                "files-resize",
-                PanelDrag::FilesTree,
-                None,
-                cx,
-            ),
             SidebarMode::Expanded => self.render_sidebar(indicators, window, cx),
             // A window too narrow for the rail keeps the bar alone, which
             // still brings the sidebar back.
@@ -459,14 +424,7 @@ impl HerdrWindow {
                 .flex_col()
                 .h_full()
                 .min_h_0()
-                .child(self.panel_title(
-                    if files {
-                        ActivityPanel::Files
-                    } else {
-                        ActivityPanel::Workspaces
-                    },
-                    cx,
-                ))
+                .child(self.panel_title(cx))
                 .child(div().flex().flex_1().min_h_0().child(sidebar)),
         )
     }
@@ -663,10 +621,10 @@ impl HerdrWindow {
             .child(text)
     }
 
-    /// The section's name over the sidebar, across its width, ended by the
+    /// Workspaces' name over the sidebar, across its width, ended by the
     /// sidebar toggle. Over the rail, too narrow for the name, the toggle
     /// stands alone.
-    fn panel_title(&self, panel: ActivityPanel, cx: &mut Context<Self>) -> Div {
+    fn panel_title(&self, cx: &mut Context<Self>) -> Div {
         let expanded = self.sidebar_visible;
         let theme = &self.theme;
         let font = &self.config.sidebar;
@@ -691,7 +649,7 @@ impl HerdrWindow {
                         .flex_1()
                         .min_w_0()
                         .truncate()
-                        .child(label(panel).to_uppercase()),
+                        .child(label(ActivityPanel::Workspaces).to_uppercase()),
                 )
             })
             .child(self.sidebar_toggle(cx))
@@ -701,7 +659,7 @@ impl HerdrWindow {
 /// Whether `panel` is a column beside the terminals, as the sidebar is,
 /// rather than a section across the window's body.
 fn beside_terminals(panel: ActivityPanel) -> bool {
-    matches!(panel, ActivityPanel::Workspaces | ActivityPanel::Files)
+    panel == ActivityPanel::Workspaces
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -721,8 +679,6 @@ struct Bubble {
 fn panel_selector(panel: ActivityPanel) -> &'static str {
     match panel {
         ActivityPanel::Overview => "activity-overview",
-        ActivityPanel::Changes => "activity-changes",
-        ActivityPanel::Files => "activity-files",
         ActivityPanel::Folders => "activity-folders",
         ActivityPanel::Workspaces => "activity-workspaces",
         ActivityPanel::PullRequests => "activity-pull-requests",

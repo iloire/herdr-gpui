@@ -190,8 +190,8 @@ impl HerdrWindow {
                     Pick::Uncommitted(shown.checkout.path.clone()),
                     file.path.clone(),
                 );
-                el.on_click(cx.listener(move |this, _, window, cx| {
-                    this.click_change(pick.clone(), Some(path.clone()), window, cx);
+                el.on_click(cx.listener(move |this, _, _, cx| {
+                    this.click_change(pick.clone(), Some(path.clone()), cx);
                 }))
             })
             .into_any_element()

@@ -9,9 +9,7 @@ pub enum ActivityPanel {
     #[default]
     Workspaces,
     Folders,
-    Files,
     Overview,
-    Changes,
     PullRequests,
     Issues,
     Security,
@@ -22,9 +20,7 @@ impl ActivityPanel {
     pub const ALL: &[Self] = &[
         Self::Workspaces,
         Self::Folders,
-        Self::Files,
         Self::Overview,
-        Self::Changes,
         Self::PullRequests,
         Self::Issues,
         Self::Security,
@@ -35,8 +31,6 @@ impl ActivityPanel {
     pub fn name(self) -> &'static str {
         match self {
             Self::Overview => "overview",
-            Self::Changes => "changes",
-            Self::Files => "files",
             Self::Folders => "folders",
             Self::Workspaces => "workspaces",
             Self::PullRequests => "pull-requests",

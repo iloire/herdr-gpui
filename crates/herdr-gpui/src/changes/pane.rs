@@ -1,17 +1,15 @@
-//! What the Changes section shows beside its list, as Git clients do: the
+//! What a folder's Changes shows beside its list, as Git clients do: the
 //! item picked on the left, a commit or a checkout's uncommitted changes,
-//! read in the review on the right (`review::view::pane`). The list's first
-//! item is picked when the section shows, and ↑ and ↓ step through it.
+//! read in the review on the right (`review::view::pane`).
 
-use super::{Rank, Shown};
+use super::Shown;
 use crate::{
     HerdrWindow,
     browser::ReviewCheckout,
     review::{Agent, CommitId},
-    sidebar::ActivityPanel,
     window::Flash,
 };
-use gpui::{prelude::*, *};
+use gpui::prelude::*;
 use std::path::Path;
 
 /// An item of the list that shows changes.
@@ -32,29 +30,6 @@ impl Pick {
 }
 
 impl HerdrWindow {
-    /// The items the list draws, in its order: each listed checkout's
-    /// uncommitted changes, unless it is detached, then its commits.
-    fn changes_picks(&self) -> Vec<Pick> {
-        let all = self.changes.all;
-        self.changes
-            .repos()
-            .iter()
-            .flat_map(|repo| &repo.checkouts)
-            .filter(|shown| all || shown.rank() != Rank::Clean)
-            .flat_map(|shown| {
-                let checkout = &shown.checkout;
-                let uncommitted = (checkout.dirty() && checkout.branch.is_some())
-                    .then(|| Pick::Uncommitted(checkout.path.clone()));
-                uncommitted
-                    .into_iter()
-                    .chain(checkout.commits.iter().map(|commit| Pick::Commit {
-                        checkout: checkout.path.clone(),
-                        sha: commit.sha.clone(),
-                    }))
-            })
-            .collect()
-    }
-
     /// Whether `pick` is what the review beside the list shows.
     pub(super) fn change_picked(&self, pick: &Pick) -> bool {
         self.changes.picked.as_ref() == Some(pick)
@@ -116,18 +91,6 @@ impl HerdrWindow {
             .find_map(|pane| crate::review::agent_in(snapshot, &pane.pane_id))
     }
 
-    /// Picks the list's first item while the section shows and nothing is
-    /// picked yet, so the review beside it is never empty.
-    pub(super) fn pick_first_change(&mut self, cx: &mut Context<Self>) {
-        if self.changes.picked.is_some() || self.activity_section() != Some(ActivityPanel::Changes)
-        {
-            return;
-        }
-        if let Some(first) = self.changes_picks().into_iter().next() {
-            self.pick_change(first, None, cx);
-        }
-    }
-
     /// Shows the checkout at `path` in the review, unless something of it
     /// already is: its uncommitted changes, else its latest commit.
     pub(crate) fn pick_checkout_change(&mut self, path: &str, cx: &mut Context<Self>) {
@@ -162,42 +125,13 @@ impl HerdrWindow {
         self.pick_change(pick, None, cx);
     }
 
-    /// Picks the item after the one picked, or before it.
-    pub(super) fn step_change(&mut self, forward: bool, cx: &mut Context<Self>) {
-        let picks = self.changes_picks();
-        let at = self
-            .changes
-            .picked
-            .as_ref()
-            .and_then(|picked| picks.iter().position(|pick| pick == picked));
-        let next = match (at, forward) {
-            (None, _) => Some(0),
-            (Some(at), true) => Some(at + 1),
-            (Some(at), false) => at.checked_sub(1),
-        };
-        if let Some(pick) = next.and_then(|next| picks.get(next)).cloned() {
-            self.pick_change(pick, None, cx);
-        }
-    }
-
-    /// The handle the list holds the keyboard with, for ↑ and ↓.
-    pub(super) fn changes_list_focus(&mut self, cx: &mut Context<Self>) -> FocusHandle {
-        self.changes
-            .focus
-            .get_or_insert_with(|| cx.focus_handle())
-            .clone()
-    }
-
-    /// Picks `pick` from a click on its row, the list taking the keyboard.
+    /// Picks `pick` from a click on its row.
     pub(super) fn click_change(
         &mut self,
         pick: Pick,
         file: Option<String>,
-        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let focus = self.changes_list_focus(cx);
-        window.focus(&focus, cx);
         self.pick_change(pick, file, cx);
     }
 }

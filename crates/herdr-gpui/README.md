@@ -1675,8 +1675,8 @@ other worktrees and how many still hold work not on the default branch, and
 the branch's pull request with its checks once the prefetch has it. What needs
 you takes its own red segment: a rebase, merge, cherry-pick, revert, or bisect
 stopped halfway (`rebase 3/7 stopped`), or a git-crypt repository whose key is
-missing. Click the branch, changes, or worktrees to open the activity bar's
-Changes section, and the pull request to open it on GitHub.
+missing. Click the branch, changes, or worktrees to open the folder's
+Changes, and the pull request to open it on GitHub.
 
 The folder is the one the pane's foreground process runs in, else its
 shell's, read with read-only Git every 10 seconds and at once when focus moves
@@ -2257,8 +2257,18 @@ window at once, and `herdr-gpui ui panel NAME` shows a section.
   column beside the list shows each host's CPU, memory, agents, and ports;
   each host folds, and the column folds to a strip of load dots. The icon
   counts what needs you.
-- **Changes** shows what every checkout on this machine holds in Git right
-  now, one card per repository with its worktrees together. It reads every
+- **Folders** lists every open workspace on every connected host, what needs
+  you first, with its mark, branch, uncommitted files, and agent. The folder
+  picked unfolds into **Home**, **Terminals**, **Changes**, and **Files**, and
+  each folder opens at the part it was left on. Home and Changes fill the
+  window beside the list; Terminals shows the workspace's own terminals and
+  tabs; Files shows its checkout as a tree beside the list, with only file
+  tabs in the window, and no terminal, until Terminals is picked again. Drag
+  the edge of the list, the tree, or the Changes list to resize it; a
+  double-click goes back to the default width.
+
+  A folder's **Changes** shows what its checkout holds in Git right now. The
+  window reads every
   workspace's folder and every pane's working directory, then adds every
   other worktree of those repositories, so a worktree an agent left behind
   shows after its pane closed. Each checkout shows its branch with `↑`/`↓`
@@ -2273,19 +2283,16 @@ window at once, and `herdr-gpui ui panel NAME` shows a section.
   right, as in a desktop Git client: clicking a file shows the checkout's
   uncommitted changes at that file, and clicking a commit shows that commit
   (see [Reviewing a commit](#reviewing-a-commit)), even in a detached
-  checkout. The first item is picked when the section opens, and once the
-  list is clicked, ↑ and ↓ step through its uncommitted changes and commits.
+  checkout. The first item is picked when Changes opens.
   Drag the line between the list and the review to give either more room;
   a double-click on it goes back to the default width, and the width is
   remembered. The review keeps unified or side by side, whitespace, and its
   panels from one pick to the next; while notes in it wait to be sent, another pick is
   refused so they are not lost. Right-clicking a commit copies its full
-  name. All counts are as of the last fetch; nothing contacts a remote. Dirty checkouts come first, then unpushed, unmerged, and behind.
-  **Needs attention**, the default, folds clean checkouts away; **All** lists
-  them. Clicking a checkout opens the workspace open in it. It reads every 15
-  seconds while shown and every two minutes otherwise, so the icon's count of
-  checkouts with uncommitted work stays current. Only this machine is read,
-  not SSH hosts. `[changes]` adds checkouts to it whether or not anything is
+  name. All counts are as of the last fetch; nothing contacts a remote.
+  Clicking a checkout opens the workspace open in it. It reads every 15
+  seconds while Folders is shown and every two minutes otherwise, so the
+  folders' counts stay current. Only this machine is read, not SSH hosts. `[changes]` adds checkouts to it whether or not anything is
   open in them (`repos`), folders whose repositories, one level down, are all
   read (`roots`), and patterns for more files to fold with the generated ones
   (`noise`: `*.ext` by extension, `name/` for any folder of that name, else a
@@ -2297,8 +2304,6 @@ window at once, and `herdr-gpui ui panel NAME` shows a section.
   roots = ["~/code"]
   noise = ["*.blend", "renders/"]
   ```
-
-  `[sidebar] changes = false` turns the section off.
 - **Pull requests** and **Issues** list every repository the connected hosts'
   workspaces hold (see [Orchestrator](#orchestrator)). Refresh spins while a
   sync runs. `[sidebar] pull_requests = false` or `issues = false` leaves
@@ -2991,7 +2996,7 @@ the titlebar's Git menu where its button would.
   note always shows the notes, and the notes icon counts the unsent ones.
   Shown in a narrow group, each panel keeps to 30% of the review.
 
-- <a id="reviewing-a-commit"></a>A commit picked in the Changes section is
+- <a id="reviewing-a-commit"></a>A commit picked in a folder's Changes is
   reviewed beside its list, showing what that commit changed against its
   first parent (everything it holds, for a root commit), with its subject
   and author in the header in place of the scope switch. Its lines carry the

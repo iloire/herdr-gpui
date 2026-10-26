@@ -214,6 +214,25 @@ impl HerdrWindow {
         self.select_folder(card, Some(Part::Terminals), window, cx);
     }
 
+    /// Shows Folders at `part` of the folder the window shows, as the status
+    /// bar's checkout and the CLI ask.
+    pub(crate) fn open_shown_folder(
+        &mut self,
+        part: Part,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.show_activity_panel(ActivityPanel::Folders, window, cx);
+        let cards = self.folder_cards(cx);
+        let shown = cards
+            .iter()
+            .find(|card| self.shows_workspace(card.endpoint_index, &card.workspace))
+            .cloned();
+        if let Some(card) = shown {
+            self.select_folder(&card, Some(part), window, cx);
+        }
+    }
+
     fn show_all_folders(&mut self, all: bool, cx: &mut Context<Self>) {
         self.folders.all = all;
         cx.notify();

@@ -257,7 +257,7 @@ impl HerdrWindow {
     /// Runs every tick: follows the focus, and reads the followed checkout
     /// when a read is due and the section is shown.
     pub(crate) fn poll_files(&mut self, cx: &mut Context<Self>) {
-        if !self.files_shown() {
+        if !self.files_view() {
             return;
         }
         if self.selected_is_remote() {

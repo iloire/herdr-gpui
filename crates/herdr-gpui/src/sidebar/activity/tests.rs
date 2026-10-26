@@ -9,7 +9,6 @@ use crate::{
 mod back;
 mod bubbles;
 mod counts;
-mod files;
 mod layout;
 mod sections;
 mod startup_counts;

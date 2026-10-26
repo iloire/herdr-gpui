@@ -16,6 +16,7 @@ fn window(cx: &mut TestAppContext) -> (Entity<HerdrWindow>, &mut VisualTestConte
         let mut shown = serde_json::to_value(crate::sidebar::layout_tests::snapshot(1)).unwrap();
         shown["focused_workspace_id"] = "w0".into();
         view.live.snapshot = Some(Arc::new(serde_json::from_value(shown).unwrap()));
+        view.live.status = crate::state::ConnectionStatus::Connected;
         view
     })
 }
@@ -24,6 +25,16 @@ fn show(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext, panel: ActivityP
     cx.update(|window, cx| {
         view.update(cx, |view, cx| view.show_activity_panel(panel, window, cx));
     });
+}
+
+/// Shows the window's folder at its Files.
+fn files(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) {
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.open_shown_folder(crate::folders::Part::Files, window, cx)
+        });
+    });
+    assert!(view.read_with(cx, |view, _| view.files_view()));
 }
 
 /// Whether the strip lists tab `id`, and whether its group shows it.
@@ -37,12 +48,12 @@ fn listed(view: &Entity<HerdrWindow>, id: TabId, cx: &mut VisualTestContext) -> 
 }
 
 #[gpui::test]
-fn file_tabs_stay_in_the_files_view(cx: &mut TestAppContext) {
+fn file_tabs_stay_in_a_folders_files(cx: &mut TestAppContext) {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("main.rs");
     std::fs::write(&path, "fn main() {}\n").unwrap();
     let (view, cx) = window(cx);
-    show(&view, cx, ActivityPanel::Files);
+    files(&view, cx);
     let target = EditorTarget { path, line: None };
     cx.update(|window, cx| view.update(cx, |view, cx| view.open_code_view(&target, window, cx)));
     let id = view.read_with(cx, |view, _| *view.code_views.keys().next().unwrap());
@@ -54,10 +65,10 @@ fn file_tabs_stay_in_the_files_view(cx: &mut TestAppContext) {
     show(&view, cx, ActivityPanel::Workspaces);
     assert_eq!(listed(&view, id, cx), (false, false));
     // Another section across the body does not bring it back either.
-    show(&view, cx, ActivityPanel::Changes);
+    show(&view, cx, ActivityPanel::Overview);
     assert_eq!(listed(&view, id, cx), (false, false));
 
-    show(&view, cx, ActivityPanel::Files);
+    files(&view, cx);
     assert_eq!(listed(&view, id, cx), (true, true));
 }
 
