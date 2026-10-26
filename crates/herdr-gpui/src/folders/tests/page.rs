@@ -79,6 +79,18 @@ fn every_workspace_is_a_card_and_the_waiting_one_leads(cx: &mut gpui::TestAppCon
 }
 
 #[gpui::test]
+fn every_card_takes_one_width_and_a_row_never_overflows(cx: &mut gpui::TestAppContext) {
+    let (view, cx) = fixture(cx);
+    let host = endpoint(&view, cx);
+    let page = bounds(cx, "folders-cards").expect("cards");
+    let first = bounds(cx, &format!("folder-{host}-w1")).expect("first card");
+    let second = bounds(cx, &format!("folder-{host}-w0")).expect("second card");
+    assert_eq!(first.size.width, second.size.width);
+    assert!(first.size.width >= px(300.));
+    assert!(second.right() <= page.right(), "{second:?} past {page:?}");
+}
+
+#[gpui::test]
 fn needs_me_keeps_only_cards_waiting_on_the_user(cx: &mut gpui::TestAppContext) {
     let (view, cx) = fixture(cx);
     let host = endpoint(&view, cx);

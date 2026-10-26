@@ -14,6 +14,9 @@ use gpui::{prelude::*, *};
 
 /// The least a card takes before the row wraps.
 const CARD_MIN: f32 = 300.;
+/// Room around and between the cards.
+const PAD: f32 = 16.;
+const GAP: f32 = 12.;
 const MARK: f32 = 30.;
 
 impl HerdrWindow {
@@ -37,16 +40,17 @@ impl HerdrWindow {
                 .child("Nothing needs you in any folder.")
                 .into_any_element()
         } else {
+            let width = self.folder_card_width();
             div()
                 .debug_selector(|| "folders-cards".into())
-                .p_4()
+                .p(px(PAD))
                 .flex()
                 .flex_wrap()
-                .gap_3()
+                .gap(px(GAP))
                 .children(
                     shown
                         .into_iter()
-                        .map(|card| self.render_folder_card(&look, card, cx)),
+                        .map(|card| self.render_folder_card(&look, card, width, cx)),
                 )
                 .into_any_element()
         };
@@ -148,7 +152,24 @@ impl HerdrWindow {
             .child(filter("folders-all", "All", true, cx))
     }
 
-    fn render_folder_card(&self, look: &Look, card: &Card, cx: &mut Context<Self>) -> AnyElement {
+    /// Every card's width: as many columns of at least [`CARD_MIN`] as the
+    /// page holds, sharing its width, so a short last row keeps the size of
+    /// the rows above it.
+    fn folder_card_width(&self) -> f32 {
+        let bar = self.sidebar_column_width(self.viewport_width).unwrap_or(0.);
+        // One pixel spare, so rounding never wraps a full row.
+        let room = (self.viewport_width - bar - 2. * PAD - 1.).max(CARD_MIN);
+        let columns = ((room + GAP) / (CARD_MIN + GAP)).floor().max(1.);
+        ((room - GAP * (columns - 1.)) / columns).floor()
+    }
+
+    fn render_folder_card(
+        &self,
+        look: &Look,
+        card: &Card,
+        width: f32,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let theme = look.theme;
         let selector = format!("folder-{}-{}", card.endpoint, card.workspace);
         let needs = card.rank() == model::Rank::NeedsYou;
@@ -180,8 +201,8 @@ impl HerdrWindow {
             .flex()
             .flex_col()
             .gap_2()
-            .flex_1()
-            .min_w(px(CARD_MIN))
+            .flex_none()
+            .w(px(width))
             .p_3()
             .rounded(px(corners::PANEL))
             .bg(rgb(theme.surface))
