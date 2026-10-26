@@ -2270,9 +2270,11 @@ window at once, and `herdr-gpui ui panel NAME` shows a section.
   tabs in the window, and no terminal, until Terminals is picked again. Drag
   the edge of the list, the tree, or the Changes list to resize it; a
   double-click goes back to the default width. The **+** at the right of
-  the list's header (**Open project**) opens the command palette on its
-  projects, the ones you opened most recently first; choosing one focuses its
-  workspace, or creates it, and Folders selects that folder on its Home.
+  the list's header (**Open project**) opens a project picker: the folders
+  inside `[palette] project_roots`, the ones you opened most recently first,
+  without the palette's other filters. Choosing one focuses its workspace, or
+  creates it, and Folders selects that folder on its Home. With no roots set
+  the picker says so and shows how to add one.
 
   A folder's **Changes** shows what its checkout holds in Git right now. The
   window reads every

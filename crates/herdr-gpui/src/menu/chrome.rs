@@ -417,8 +417,9 @@ impl HerdrWindow {
                             .max(px(0.))
                             .min(px(if add_device {
                                 rail::WIDTH * (font.size / 12.)
-                            } else if page == Page::Palette && self.palette_previews(viewport) {
-                                // Room for Go To's list beside its preview.
+                            } else if page == Page::Palette && self.palette_wide(viewport) {
+                                // Room for Go To's list beside its preview, on
+                                // every filter so switching keeps the width.
                                 1120. * (font.size / 12.)
                             } else if page == Page::Palette {
                                 // Wide like Raycast, so the query leads the panel.

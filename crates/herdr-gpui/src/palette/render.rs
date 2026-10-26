@@ -1,6 +1,6 @@
 //! The palette paints prepared entries; input and daemon operations live elsewhere.
 
-use super::{Action, AgentFilter, Filter, Palette, preview};
+use super::{Action, AgentFilter, Filter, Palette, Scope, preview};
 use crate::HerdrWindow;
 use gpui::{prelude::*, *};
 
@@ -9,6 +9,12 @@ use gpui::{prelude::*, *};
 const PREVIEW_MIN_WIDTH: f32 = 840.;
 
 const HINTS: &str = "↑↓ / Tab / ⌃N ⌃P move · ⌃Tab filter · ↵ select · Esc close";
+/// Projects are the folders inside the configured roots, so without one
+/// the picker has nothing to list.
+const NO_PROJECT_ROOTS: &str = "No project folders yet. List the folders that hold your \
+     checkouts under [palette] project_roots in the config, such as \
+     project_roots = [\"~/code\"], and each folder inside them shows here.";
+const OPEN_PROJECT_HINTS: &str = "↑↓ move · ↵ open · Esc close";
 const GO_TO_HINTS: &str =
     "↑↓ / Tab / ⌃N ⌃P move · ⌃Tab filter · ⌥B/W/I/D/A status · ⌥P preview · ↵ select · Esc close";
 
@@ -47,37 +53,20 @@ impl HerdrWindow {
                     .items_center()
                     .gap(px(12.))
                     .text_color(rgb(theme.muted))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .flex_wrap()
-                            .gap(px(4.))
-                            .children(Filter::ALL.into_iter().map(|filter| {
-                                div()
-                                    .id(("palette-filter", filter as usize))
-                                    .debug_selector(move || {
-                                        format!("palette-filter-{}", filter.label().to_lowercase())
-                                    })
-                                    .px_2()
-                                    .py_1()
-                                    .rounded(px(crate::config::corners::CONTROL))
-                                    .cursor_pointer()
-                                    .when(filter == palette.filter, |tab| {
-                                        tab.bg(rgb(theme.active)).text_color(rgb(theme.foreground))
-                                    })
-                                    .hover(|tab| tab.bg(rgb(theme.active)))
-                                    .child(filter.label())
-                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.set_palette_filter(filter, cx);
-                                        if let Some(palette) = &this.menu.palette {
-                                            let focus = palette.search.read(cx).focus.clone();
-                                            window.focus(&focus, cx);
-                                        }
-                                    }))
-                            })),
-                    )
+                    .when(palette.scope == Scope::OpenProject, |row| {
+                        row.child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .px_2()
+                                .py_1()
+                                .text_color(rgb(theme.foreground))
+                                .child("Open project"),
+                        )
+                    })
+                    .when(palette.scope == Scope::Everything, |row| {
+                        row.child(self.palette_filters(palette, cx))
+                    })
                     .child(div().flex_none().child(format!(
                         "{} of {}",
                         palette.filtered.len(),
@@ -91,6 +80,40 @@ impl HerdrWindow {
                         .child(self.palette_agent_filters(palette, cx)),
                 )
             })
+    }
+
+    /// The filter tabs of the palette opened on everything.
+    fn palette_filters(&self, palette: &Palette, cx: &mut Context<Self>) -> Div {
+        let theme = &self.theme;
+        div()
+            .flex_1()
+            .min_w_0()
+            .flex()
+            .flex_wrap()
+            .gap(px(4.))
+            .children(Filter::ALL.into_iter().map(|filter| {
+                div()
+                    .id(("palette-filter", filter as usize))
+                    .debug_selector(move || {
+                        format!("palette-filter-{}", filter.label().to_lowercase())
+                    })
+                    .px_2()
+                    .py_1()
+                    .rounded(px(crate::config::corners::CONTROL))
+                    .cursor_pointer()
+                    .when(filter == palette.filter, |tab| {
+                        tab.bg(rgb(theme.active)).text_color(rgb(theme.foreground))
+                    })
+                    .hover(|tab| tab.bg(rgb(theme.active)))
+                    .child(filter.label())
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.set_palette_filter(filter, cx);
+                        if let Some(palette) = &this.menu.palette {
+                            let focus = palette.search.read(cx).focus.clone();
+                            window.focus(&focus, cx);
+                        }
+                    }))
+            }))
     }
 
     /// Go To's status chips; Alt with the chip's navigator letter picks one
@@ -202,16 +225,27 @@ impl HerdrWindow {
             }))
     }
 
-    /// Whether Go To shows its preview: it is toggled on, and the window has
-    /// room for it beside the list.
-    pub(crate) fn palette_previews(&self, viewport: Size<Pixels>) -> bool {
+    /// Whether the palette is drawn wide enough for Go To's preview: it is
+    /// toggled on, the palette is opened on everything, and the window has room.
+    /// Every filter shares the width, so the panel holds still as they change.
+    pub(crate) fn palette_wide(&self, viewport: Size<Pixels>) -> bool {
         self.menu.palette_preview
             && self
                 .menu
                 .palette
                 .as_ref()
-                .is_some_and(|palette| palette.filter == Filter::Navigation)
+                .is_some_and(|palette| palette.scope == Scope::Everything)
             && f32::from(viewport.width) - 32. >= PREVIEW_MIN_WIDTH
+    }
+
+    /// Whether Go To shows its preview beside the list.
+    fn palette_previews(&self, viewport: Size<Pixels>) -> bool {
+        self.palette_wide(viewport)
+            && self
+                .menu
+                .palette
+                .as_ref()
+                .is_some_and(|palette| palette.filter == Filter::Navigation)
     }
 
     /// The preview of the selected Go To row, from what its host's
@@ -333,6 +367,8 @@ impl HerdrWindow {
         };
         let theme = &self.theme;
         let previews = self.palette_previews(viewport);
+        let no_roots =
+            palette.scope == Scope::OpenProject && self.config.palette.project_roots.is_empty();
         div()
             .flex()
             .flex_col()
@@ -394,7 +430,14 @@ impl HerdrWindow {
                                 .flex_1()
                                 .p(px(16.))
                                 .text_color(rgb(theme.muted))
-                                .child("No matching results. Try a shorter search."),
+                                .when(!no_roots, |empty| {
+                                    empty.child("No matching results. Try a shorter search.")
+                                })
+                                .when(no_roots, |empty| {
+                                    empty
+                                        .debug_selector(|| "palette-no-project-roots".into())
+                                        .child(NO_PROJECT_ROOTS)
+                                }),
                         )
                     })
                     .when(!palette.filtered.is_empty(), |body| {
@@ -431,6 +474,8 @@ impl HerdrWindow {
                     .text_color(rgb(theme.muted))
                     .child(if palette.busy() {
                         "Opening local project... Esc to dismiss."
+                    } else if palette.scope == Scope::OpenProject {
+                        OPEN_PROJECT_HINTS
                     } else if palette.filter == Filter::Navigation {
                         GO_TO_HINTS
                     } else {

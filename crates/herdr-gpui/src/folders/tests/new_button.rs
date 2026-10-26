@@ -1,5 +1,8 @@
 use super::page::{bounds, click, fixture};
-use crate::{folders::Part, palette::Filter};
+use crate::{
+    folders::Part,
+    palette::{Filter, Scope},
+};
 use std::sync::Arc;
 
 #[gpui::test]
@@ -10,6 +13,7 @@ fn the_new_button_opens_the_palette_on_its_projects(cx: &mut gpui::TestAppContex
     view.read_with(cx, |view, _| {
         let palette = view.menu.palette.as_ref().expect("palette open");
         assert_eq!(palette.filter(), Filter::Projects);
+        assert_eq!(palette.scope(), Scope::OpenProject);
         assert!(view.folders.follow_opened);
     });
 }

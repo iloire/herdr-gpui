@@ -111,6 +111,17 @@ impl Filter {
     }
 }
 
+/// What the palette was opened to do.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum Scope {
+    /// Everything, with filters to narrow it.
+    #[default]
+    Everything,
+    /// Only projects to open or create, as the Folders list's + asks; the
+    /// filters are hidden so the panel says what it is for.
+    OpenProject,
+}
+
 #[derive(Clone)]
 enum Action {
     Native(Command),
@@ -340,6 +351,7 @@ pub(super) struct Palette {
     scroll: UniformListScrollHandle,
     target: Option<Target>,
     filter: Filter,
+    scope: Scope,
     /// Narrows Go To to agents in one status; other filters ignore it.
     agent_filter: AgentFilter,
     query: String,
@@ -397,6 +409,12 @@ impl Palette {
     #[cfg(test)]
     pub(crate) fn filter(&self) -> Filter {
         self.filter
+    }
+
+    /// What the palette was opened to do, for tests outside this module.
+    #[cfg(test)]
+    pub(crate) fn scope(&self) -> Scope {
+        self.scope
     }
 
     fn selected_identity(&self) -> Option<Identity> {
@@ -478,6 +496,9 @@ impl HerdrWindow {
 
     pub(super) fn set_palette_filter(&mut self, filter: Filter, cx: &mut Context<Self>) {
         if let Some(palette) = &mut self.menu.palette {
+            if palette.scope == Scope::OpenProject {
+                return;
+            }
             palette.filter = filter;
             palette.restore = None;
         }
@@ -548,14 +569,24 @@ impl HerdrWindow {
         }));
     }
 
-    /// Opens the palette on its projects, the most recent first.
+    /// Opens the palette on its projects alone, the most recent first.
     pub(crate) fn open_projects_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.open_palette(Filter::Projects, window, cx);
+        self.open_scoped_palette(Filter::Projects, Scope::OpenProject, window, cx);
     }
 
     pub(super) fn open_palette(
         &mut self,
         filter: Filter,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_scoped_palette(filter, Scope::Everything, window, cx);
+    }
+
+    fn open_scoped_palette(
+        &mut self,
+        filter: Filter,
+        scope: Scope,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -592,7 +623,16 @@ impl HerdrWindow {
                 })
             });
         search.update(cx, |input, cx| {
-            input.set_placeholder("Search workspaces, commands, agents, and projects...", cx);
+            input.set_placeholder(
+                match scope {
+                    Scope::Everything => "Search workspaces, commands, agents, and projects...",
+                    Scope::OpenProject if self.config.palette.project_roots.is_empty() => {
+                        "Search projects to open..."
+                    }
+                    Scope::OpenProject => "Search projects to open, or name a new one...",
+                },
+                cx,
+            );
             input.set_frameless(cx);
             input.set_appearance(render::search_font(&self.config.ui), self.theme.clone(), cx);
             window.focus(&input.focus, cx);
@@ -609,6 +649,7 @@ impl HerdrWindow {
             scroll: UniformListScrollHandle::new(),
             target,
             filter,
+            scope,
             agent_filter: AgentFilter::All,
             query: String::new(),
             error: None,

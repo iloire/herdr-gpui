@@ -3,7 +3,7 @@
 //! The status always comes from the daemon snapshot an entry was built from;
 //! a terminal without an agent has none and only passes [`AgentFilter::All`].
 
-use super::{Entry, Filter, Selection, search};
+use super::{Entry, Filter, Scope, Selection, search};
 use crate::HerdrWindow;
 use gpui::{Context, Keystroke, Modifiers};
 use herdr_client::protocol::AgentStatus;
@@ -137,6 +137,9 @@ impl HerdrWindow {
         cx: &mut Context<Self>,
     ) {
         if let Some(palette) = &mut self.menu.palette {
+            if palette.scope == Scope::OpenProject {
+                return;
+            }
             palette.filter = Filter::Navigation;
             palette.agent_filter = agent_filter;
             palette.restore = None;

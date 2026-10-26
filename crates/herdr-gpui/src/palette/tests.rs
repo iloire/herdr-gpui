@@ -12,6 +12,7 @@ mod notes;
 mod plugin_selection;
 mod preview_layout;
 mod resume;
+mod scope_layout;
 
 fn matches_query(text: &str, query: &str) -> bool {
     let entries = [Entry::new(
