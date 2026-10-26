@@ -1,11 +1,12 @@
-//! The folder list down the page's left side: a row per folder, its mark,
-//! name, branch, host, and badges for uncommitted files and its agent, and
+//! The folder list down the page's left side: a row per folder, its name,
+//! branch, host, and badges for uncommitted files and its agent, and
 //! under the selected one the parts it holds, each shown beside the list.
+//! The selected folder's own row is its Home.
 
 use super::{
     Part,
     model::{Card, Rank},
-    view::{bubble, host_chip, mark},
+    view::{bubble, host_chip},
 };
 use crate::{
     HerdrWindow,
@@ -155,14 +156,22 @@ impl HerdrWindow {
             .py_1p5()
             .rounded(px(corners::CONTROL))
             .cursor_pointer()
-            .when(open, |row| row.bg(rgb(theme.active)))
+            .when(open, |row| {
+                row.bg(rgb(if self.folders.part == Part::Home {
+                    theme.primary_wash()
+                } else {
+                    theme.active
+                }))
+            })
             .when(!open, |row| {
                 row.hover(|style| style.bg(rgb(mix(theme.surface, theme.foreground, 4))))
             })
+            // The open folder's row is its Home; another folder opens at
+            // the part it was left on.
             .on_click(cx.listener(move |this, _, window, cx| {
-                this.select_folder(&clicked, None, window, cx);
+                let part = open.then_some(Part::Home);
+                this.select_folder(&clicked, part, window, cx);
             }))
-            .child(mark(look, &card.name, 28.))
             .child(
                 div()
                     .flex()
@@ -199,8 +208,7 @@ impl HerdrWindow {
             .map(|dirty| dirty.files)
             .filter(|files| *files > 0);
         let ahead = card.ahead;
-        let parts: [(&str, &str, &str, Option<usize>, Part); 4] = [
-            ("home", "Home", "icons/pulse.svg", None, Part::Home),
+        let parts: [(&str, &str, &str, Option<usize>, Part); 3] = [
             (
                 "terminals",
                 "Terminals",
@@ -220,7 +228,7 @@ impl HerdrWindow {
         div()
             .flex()
             .flex_col()
-            .ml(px(22.))
+            .ml(px(10.))
             .pl_2()
             .my_1()
             .border_l_1()

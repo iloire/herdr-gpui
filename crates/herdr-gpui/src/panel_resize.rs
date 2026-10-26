@@ -53,7 +53,7 @@ pub(crate) const NOTES: PanelWidth = PanelWidth::new(300., 220.);
 /// The Changes section's list, left of its review.
 pub(crate) const CHANGES_LIST: PanelWidth = PanelWidth::new(420., 260.);
 /// The Folders list, as a page or beside the terminals.
-pub(crate) const FOLDERS_LIST: PanelWidth = PanelWidth::new(290., 180.);
+pub(crate) const FOLDERS_LIST: PanelWidth = PanelWidth::new(260., 180.);
 /// The Files tree, in the Files view or beside the Folders list.
 pub(crate) const FILES_TREE: PanelWidth = PanelWidth::new(260., 160.);
 /// The Issues filters' column.

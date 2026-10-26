@@ -2258,9 +2258,10 @@ window at once, and `herdr-gpui ui panel NAME` shows a section.
   each host folds, and the column folds to a strip of load dots. The icon
   counts what needs you.
 - **Folders** lists every open workspace on every connected host, what needs
-  you first, with its mark, branch, uncommitted files, and agent. The folder
-  picked unfolds into **Home**, **Terminals**, **Changes**, and **Files**, and
-  each folder opens at the part it was left on. Home and Changes fill the
+  you first, with its branch, uncommitted files, and agent. The folder picked
+  unfolds into **Terminals**, **Changes**, and **Files**, and each folder
+  opens at the part it was left on; a click on the open folder's own row
+  shows its Home, an overview. Home and Changes fill the
   window beside the list; Terminals shows the workspace's own terminals and
   tabs; Files shows its checkout as a tree beside the list, with only file
   tabs in the window, and no terminal, until Terminals is picked again. Drag

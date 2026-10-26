@@ -25,13 +25,13 @@ fn width(cx: &mut VisualTestContext, selector: &str) -> Pixels {
 #[gpui::test]
 fn the_list_and_tree_resize_and_the_terminals_take_the_room(cx: &mut gpui::TestAppContext) {
     let (view, cx) = fixture(cx);
-    assert_eq!(width(cx, "folders-list"), px(290.));
+    let default = width(cx, "folders-list");
     // On the page, the list narrows.
     drag(cx, "folders-list-resize", px(-80.));
-    assert!((width(cx, "folders-list") - px(210.)).abs() <= px(4.));
+    assert!((width(cx, "folders-list") - (default - px(80.))).abs() <= px(4.));
     // Beside the terminals it keeps that width, and the tree resizes too.
     click(cx, "folder-part-files");
-    assert!((width(cx, "folders-list") - px(210.)).abs() <= px(4.));
+    assert!((width(cx, "folders-list") - (default - px(80.))).abs() <= px(4.));
     let terminal = bounds(cx, "stand-in").unwrap().left();
     drag(cx, "folders-tree-resize", px(-60.));
     assert!((width(cx, "files") - px(200.)).abs() <= px(4.));
@@ -56,7 +56,7 @@ fn the_list_and_tree_resize_and_the_terminals_take_the_room(cx: &mut gpui::TestA
     });
     cx.simulate_mouse_up(edge, MouseButton::Left, Modifiers::default());
     draw(cx);
-    assert_eq!(width(cx, "folders-list"), px(290.));
+    assert_eq!(width(cx, "folders-list"), default, "back to its default");
 }
 
 #[gpui::test]

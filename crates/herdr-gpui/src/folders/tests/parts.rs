@@ -92,8 +92,9 @@ fn files_shows_only_files_beside_the_tree(cx: &mut gpui::TestAppContext) {
         bounds(cx, "terminal").is_none(),
         "the terminal waits under Terminals"
     );
-    // Home is a page again, and the file tabs go back to Workspaces' rules.
-    click(cx, "folder-part-home");
+    // Home, from the folder's own row, is a page again, and the file tabs
+    // go back to Workspaces' rules.
+    click(cx, &format!("folder-{host}-w0"));
     assert!(bounds(cx, "folder-home").is_some());
     assert!(bounds(cx, "files").is_none());
     assert!(!cx.update(|_, cx| view.read(cx).files_view()));
@@ -110,7 +111,7 @@ fn each_folder_opens_at_the_part_it_was_left_on(cx: &mut gpui::TestAppContext) {
     click(cx, &format!("folder-{host}-w0"));
     focus(&view, "w0", cx);
     assert_eq!(part(&view, cx), (Part::Terminals, true));
-    click(cx, "folder-part-home");
+    click(cx, &format!("folder-{host}-w0"));
     assert_eq!(part(&view, cx), (Part::Home, false));
     // Back to w1: its Terminals, and back to w0: its Home.
     click(cx, &format!("folder-{host}-w1"));

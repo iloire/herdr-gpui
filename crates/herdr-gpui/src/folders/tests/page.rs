@@ -75,8 +75,12 @@ fn every_workspace_is_listed_and_the_waiting_one_leads_unfolded(cx: &mut gpui::T
         "{waiting:?} {working:?}"
     );
     // The first folder is unfolded, its parts under its row, its Home shown.
-    let home = bounds(cx, "folder-part-home").expect("parts");
-    assert!(home.origin.y > waiting.origin.y && home.origin.y < working.origin.y);
+    let parts = bounds(cx, "folder-part-terminals").expect("parts");
+    assert!(parts.origin.y > waiting.origin.y && parts.origin.y < working.origin.y);
+    assert!(
+        bounds(cx, "folder-part-home").is_none(),
+        "its row is its Home"
+    );
     assert!(bounds(cx, "folder-home").is_some());
     assert!(cx.debug_bounds("activity-folders").is_some());
 }
@@ -87,9 +91,9 @@ fn picking_a_folder_unfolds_it_and_shows_its_home(cx: &mut gpui::TestAppContext)
     let host = endpoint(&view, cx);
     click(cx, &format!("folder-{host}-w0"));
     let picked = bounds(cx, &format!("folder-{host}-w0")).expect("row");
-    let home = bounds(cx, "folder-part-home").expect("parts");
+    let parts = bounds(cx, "folder-part-terminals").expect("parts");
     assert!(
-        home.origin.y > picked.origin.y,
+        parts.origin.y > picked.origin.y,
         "the parts hang under the picked row"
     );
     assert!(bounds(cx, "folder-home-agents").is_some());
@@ -97,11 +101,13 @@ fn picking_a_folder_unfolds_it_and_shows_its_home(cx: &mut gpui::TestAppContext)
 
 #[gpui::test]
 fn the_changes_part_fills_the_body_and_home_comes_back(cx: &mut gpui::TestAppContext) {
-    let (_, cx) = fixture(cx);
+    let (view, cx) = fixture(cx);
+    let host = endpoint(&view, cx);
     click(cx, "folder-part-changes");
     assert!(bounds(cx, "folder-changes").is_some());
     assert!(bounds(cx, "folder-home").is_none());
-    click(cx, "folder-part-home");
+    // The open folder's own row brings its Home back.
+    click(cx, &format!("folder-{host}-w1"));
     assert!(bounds(cx, "folder-home").is_some());
 }
 
