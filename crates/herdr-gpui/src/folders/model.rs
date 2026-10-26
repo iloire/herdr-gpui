@@ -77,6 +77,14 @@ impl Card {
         Some(self.name.as_str()).filter(|name| *name != self.title())
     }
 
+    /// Whether the folder's row needs a branch line: not on the usual
+    /// default branch level with its upstream, where it would only repeat
+    /// what every such folder says. The branch is in the status bar too.
+    pub(crate) fn shows_branch(&self) -> bool {
+        let default = matches!(self.branch.as_deref(), None | Some("main" | "master"));
+        !default || self.ahead > 0 || self.behind > 0
+    }
+
     /// The folder's path as the user reads it: `~` for this computer's home,
     /// in full on another host, whose home is not this one's.
     pub(crate) fn shown_folder(&self) -> String {

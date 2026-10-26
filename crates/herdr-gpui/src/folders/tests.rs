@@ -1,5 +1,6 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
+mod branch_line;
 mod drag;
 mod edge_bar;
 mod home;

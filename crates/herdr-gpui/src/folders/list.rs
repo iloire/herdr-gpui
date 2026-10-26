@@ -304,7 +304,9 @@ impl HerdrWindow {
                     .min_w_0()
                     .child(super::view::title_line(look, card, look.ui.size))
                     .child(super::view::path_line(look, card))
-                    .child(super::view::branch_line(look, card))
+                    .when(card.shows_branch(), |column| {
+                        column.child(super::view::branch_line(look, card))
+                    })
                     // What runs here, under the branch, so it is seen
                     // without opening the folder's Home.
                     .when_some(self.folder_ports(look, card, cx), |column, ports| {
