@@ -262,19 +262,31 @@ impl HerdrWindow {
         self.activity_bar_leads()
             .then(|| self.activity_panel())
             .filter(|panel| !beside_terminals(*panel))
+            .filter(|_| !self.folders_column())
     }
 
-    /// Whether the window is in the Files view, whose strips list file
-    /// tabs, whether or not its column is folded.
+    /// Whether Folders is shown as a column beside the terminals, its
+    /// folder at Terminals or Files.
+    pub(crate) fn folders_column(&self) -> bool {
+        self.activity_bar_leads()
+            && self.activity_panel() == ActivityPanel::Folders
+            && self.folders_beside_terminals()
+    }
+
+    /// Whether the window is in the Files view, or a folder's Files, whose
+    /// strips list file tabs, whether or not the Files column is folded.
     pub(crate) fn files_view(&self) -> bool {
-        self.activity_bar_leads() && self.activity_panel() == ActivityPanel::Files
+        self.activity_bar_leads()
+            && (self.activity_panel() == ActivityPanel::Files
+                || (self.folders_column() && self.folders_files()))
     }
 
     /// Whether the Files tree is on screen beside the terminals.
     pub(crate) fn files_shown(&self) -> bool {
         self.activity_bar_leads()
-            && self.activity_panel() == ActivityPanel::Files
-            && self.sidebar_mode() == SidebarMode::Expanded
+            && ((self.activity_panel() == ActivityPanel::Files
+                && self.sidebar_mode() == SidebarMode::Expanded)
+                || (self.folders_column() && self.folders_files()))
     }
 
     /// The left column's width: the bar alone beside a section, else the
@@ -283,6 +295,10 @@ impl HerdrWindow {
     pub(crate) fn sidebar_column_width(&self, window_width: f32) -> Option<f32> {
         if self.activity_section().is_some() {
             return Some(BAR_WIDTH);
+        }
+        if self.folders_column() {
+            let tree = super::metrics::sidebar_width(self.sidebar_width, window_width);
+            return Some(BAR_WIDTH + self.folders_column_width(tree));
         }
         let width = self.sidebar_mode().width(self.sidebar_width, window_width);
         if !self.activity_bar_leads() {
@@ -347,6 +363,7 @@ impl HerdrWindow {
                 window.focus(&focus, cx);
             }
             Some(_) => self.focus_activity_section(window, cx),
+            None if self.folders_column() => window.focus(&self.focus, cx),
             None => {}
         }
         cx.notify();
@@ -402,6 +419,14 @@ impl HerdrWindow {
             .child(self.render_activity_bar(cx));
         if self.activity_section().is_some() {
             return column;
+        }
+        if self.folders_column() {
+            let tree = super::metrics::sidebar_width(
+                self.sidebar_width,
+                f32::from(window.viewport_size().width),
+            );
+            let row_height = line_height(&self.config.sidebar) + 4.;
+            return column.child(self.render_folders_column(tree, row_height, cx));
         }
         let files = self.activity_panel() == ActivityPanel::Files;
         let sidebar = match self.sidebar_mode() {

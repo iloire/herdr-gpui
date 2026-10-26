@@ -1,6 +1,7 @@
 //! A folder's Home: its title with buttons to its terminals and files,
 //! then cards for what it holds. Uncommitted files and recent commits open
-//! its Changes; an agent opens its pane; a port opens in a browser tab.
+//! its Changes; an agent opens its pane in its Terminals; a port opens in
+//! a browser tab.
 
 use super::{
     Part,
@@ -13,7 +14,6 @@ use crate::{
     devices_overview::Look,
     fonts::StyledFont,
     icons::AgentIcon,
-    sidebar::ActivityPanel,
 };
 use gpui::{prelude::*, *};
 use herdr_vcs::changes::{Checkout, Kind};
@@ -54,25 +54,13 @@ impl HerdrWindow {
                     .child(
                         button(look, "folder-open-terminals", "Terminals", true).on_click(
                             cx.listener(move |this, _, window, cx| {
-                                this.open_folder(
-                                    terminals.endpoint_index,
-                                    &terminals.workspace,
-                                    ActivityPanel::Workspaces,
-                                    window,
-                                    cx,
-                                );
+                                this.select_folder(&terminals, Some(Part::Terminals), window, cx);
                             }),
                         ),
                     )
                     .child(button(look, "folder-open-files", "Files", false).on_click(
                         cx.listener(move |this, _, window, cx| {
-                            this.open_folder(
-                                files.endpoint_index,
-                                &files.workspace,
-                                ActivityPanel::Files,
-                                window,
-                                cx,
-                            );
+                            this.select_folder(&files, Some(Part::Files), window, cx);
                         }),
                     )),
             )
@@ -180,8 +168,8 @@ impl HerdrWindow {
                 panel
                     .cursor_pointer()
                     .hover(|style| style.bg(rgb(mix(theme.surface, theme.foreground, 4))))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.select_folder(&clicked, Part::Changes, cx);
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.select_folder(&clicked, Some(Part::Changes), window, cx);
                     }))
             })
             .child(body)
@@ -197,7 +185,7 @@ impl HerdrWindow {
             list = list.child(quiet(look, "No agent running"));
         }
         for (index, row) in mine.into_iter().enumerate() {
-            let clicked = row.clone();
+            let (clicked, folder) = (row.clone(), card.clone());
             list = list.child(
                 div()
                     .id(("folder-home-agent", index))
@@ -211,8 +199,7 @@ impl HerdrWindow {
                     .cursor_pointer()
                     .hover(|style| style.bg(rgb(theme.active)))
                     .on_click(cx.listener(move |this, _, window, cx| {
-                        this.open_overview_row(&clicked, window, cx);
-                        this.activity.return_to = Some(ActivityPanel::Folders);
+                        this.open_folder_agent(&folder, &clicked, window, cx);
                     }))
                     .child(crate::icons::icon(
                         AgentIcon::from_identity(row.identity.as_deref()).path(),
@@ -303,8 +290,8 @@ impl HerdrWindow {
                 panel
                     .cursor_pointer()
                     .hover(|style| style.bg(rgb(mix(theme.surface, theme.foreground, 4))))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.select_folder(&clicked, Part::Changes, cx);
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.select_folder(&clicked, Some(Part::Changes), window, cx);
                     }))
             })
             .child(body)

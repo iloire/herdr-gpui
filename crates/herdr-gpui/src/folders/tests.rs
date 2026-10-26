@@ -1,6 +1,7 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 mod page;
+mod parts;
 
 use super::model::{Card, Dirty, Host, Rank, Summary, cards, hue, monogram};
 use crate::{

@@ -1,16 +1,23 @@
 //! The activity bar's Folders section: every open workspace on every host
 //! this window connects to, as a folder in a list on the left, what needs
 //! the user first. The selected folder unfolds into what it holds, and the
-//! part picked fills the body: Home, its branch, uncommitted files, agents,
-//! commits, and ports together; Changes, its uncommitted files and commits
-//! with the review beside them; or Terminals and Files, which open the
-//! workspace with its terminals or its file tree.
+//! part picked fills the rest of the window: Home, its branch, uncommitted
+//! files, agents, commits, and ports together; Changes, its uncommitted
+//! files and commits with the review beside them; Terminals, its
+//! workspace's terminals and tabs; or Files, its file tree beside them.
+//!
+//! Home and Changes are pages across the window's body. Terminals and Files
+//! need the window's own terminal area, so with either picked the list
+//! becomes a column beside it, as the Workspaces sidebar is (`column`),
+//! and the folder shown is the workspace the window shows. Each folder
+//! keeps the part it was left on.
 //!
 //! Everything it shows is already in the window: the endpoints' snapshots
 //! (whose branch and ahead/behind each daemon reads on its own host), the
 //! Changes reader's checkouts on this machine, the Overview's agent rows,
 //! and the port monitors. Drawing reads that prepared state only.
 
+mod column;
 mod home;
 mod list;
 mod model;
@@ -22,23 +29,39 @@ mod tests;
 use crate::{HerdrWindow, sidebar::ActivityPanel};
 use gpui::{prelude::*, *};
 use model::{Card, Host};
+use std::collections::HashMap;
 
-/// What the body shows of the selected folder.
+/// What the window shows of the selected folder.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) enum Part {
     #[default]
     Home,
+    Terminals,
     Changes,
+    Files,
 }
+
+impl Part {
+    /// Whether the part is the window's terminal area, with the folder list
+    /// as a column beside it, rather than a page across the body.
+    pub(crate) fn beside_terminals(self) -> bool {
+        matches!(self, Self::Terminals | Self::Files)
+    }
+}
+
+/// A folder, by endpoint and workspace id.
+type Key = (String, String);
 
 /// The page's own state in a window.
 pub(crate) struct Page {
     /// Whether every folder is listed, or only those that need the user.
     all: bool,
-    /// The folder unfolded, by endpoint and workspace id; the first listed
-    /// when unset or gone.
-    selected: Option<(String, String)>,
-    part: Part,
+    /// The folder unfolded; the first listed when unset or gone.
+    selected: Option<Key>,
+    /// The selected folder's part.
+    pub(crate) part: Part,
+    /// The part each folder was last left on.
+    parts: HashMap<Key, Part>,
     list_scroll: ScrollHandle,
     body_scroll: ScrollHandle,
 }
@@ -49,6 +72,7 @@ impl Default for Page {
             all: true,
             selected: None,
             part: Part::Home,
+            parts: HashMap::new(),
             list_scroll: ScrollHandle::new(),
             body_scroll: ScrollHandle::new(),
         }
@@ -96,47 +120,88 @@ impl HerdrWindow {
             .collect()
     }
 
-    /// The folder unfolded: the one picked, else the first listed.
+    /// The folder unfolded: beside the terminals, the workspace the window
+    /// shows, which the keyboard may have moved to; else the one picked, else
+    /// the first listed.
     fn selected_folder<'a>(&self, listed: &[&'a Card]) -> Option<&'a Card> {
-        let picked = self
-            .folders
-            .selected
-            .as_ref()
-            .and_then(|(endpoint, workspace)| {
-                listed
-                    .iter()
-                    .find(|card| card.endpoint == *endpoint && card.workspace == *workspace)
-            });
-        picked.or_else(|| listed.first()).copied()
+        let shown = || {
+            listed
+                .iter()
+                .find(|card| self.shows_workspace(card.endpoint_index, &card.workspace))
+        };
+        let picked = || {
+            self.folders
+                .selected
+                .as_ref()
+                .and_then(|(endpoint, workspace)| {
+                    listed
+                        .iter()
+                        .find(|card| card.endpoint == *endpoint && card.workspace == *workspace)
+                })
+        };
+        let shown = self.folders.part.beside_terminals().then(shown).flatten();
+        shown.or_else(picked).or_else(|| listed.first()).copied()
     }
 
-    /// Unfolds a folder, or shows another part of the one unfolded.
-    fn select_folder(&mut self, card: &Card, part: Part, cx: &mut Context<Self>) {
-        self.folders.selected = Some((card.endpoint.clone(), card.workspace.clone()));
+    /// Unfolds a folder at `part`, or, with none given, at the part it was
+    /// left on, else the part shown now. Terminals and Files show its
+    /// workspace with the keyboard in its terminal.
+    fn select_folder(
+        &mut self,
+        card: &Card,
+        part: Option<Part>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let key = (card.endpoint.clone(), card.workspace.clone());
+        let part = part
+            .or_else(|| self.folders.parts.get(&key).copied())
+            .unwrap_or(self.folders.part);
+        let files = self.files_view();
+        self.folders.selected = Some(key.clone());
         self.folders.part = part;
-        if part == Part::Changes
-            && let Some(checkout) = &card.checkout
-        {
-            self.pick_checkout_change(checkout, cx);
+        self.folders.parts.insert(key, part);
+        if files != self.files_view() {
+            self.files_view_changed(cx);
+        }
+        self.sync_activity_section(cx);
+        match part {
+            Part::Home => self.focus_folders_page(window, cx),
+            Part::Changes => {
+                if let Some(checkout) = &card.checkout {
+                    self.pick_checkout_change(checkout, cx);
+                }
+                self.focus_folders_page(window, cx);
+            }
+            Part::Terminals | Part::Files => {
+                self.go_to_workspace(card.endpoint_index, &card.workspace, cx);
+                window.focus(&self.focus, cx);
+            }
         }
         cx.notify();
     }
 
-    /// Shows a folder's workspace in `panel`: with its terminals, or with
-    /// its file tree beside them.
-    fn open_folder(
+    /// Puts the keyboard on the Folders page, as picking the section does.
+    fn focus_folders_page(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let focus = self
+            .activity
+            .section_focus
+            .get_or_insert_with(|| cx.focus_handle())
+            .clone();
+        window.focus(&focus, cx);
+    }
+
+    /// Opens `card`'s agent pane in its Terminals, staying in Folders.
+    fn open_folder_agent(
         &mut self,
-        index: usize,
-        workspace: &str,
-        panel: ActivityPanel,
+        card: &Card,
+        row: &crate::overview::Row,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.go_to_workspace(index, workspace, cx);
-        self.show_activity_panel(panel, window, cx);
-        self.activity.return_to = Some(ActivityPanel::Folders);
-        window.focus(&self.focus, cx);
-        cx.notify();
+        self.open_overview_row(row, window, cx);
+        self.show_activity_panel(ActivityPanel::Folders, window, cx);
+        self.select_folder(card, Some(Part::Terminals), window, cx);
     }
 
     fn show_all_folders(&mut self, all: bool, cx: &mut Context<Self>) {

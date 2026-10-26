@@ -12,7 +12,9 @@ use std::sync::Arc;
 
 /// A connected window on Folders: workspace w1's agent waits on the user,
 /// w0's works.
-fn fixture(cx: &mut gpui::TestAppContext) -> (Entity<HerdrWindow>, &mut VisualTestContext) {
+pub(super) fn fixture(
+    cx: &mut gpui::TestAppContext,
+) -> (Entity<HerdrWindow>, &mut VisualTestContext) {
     let (fixture, cx) = cx.add_window_view(|window, cx| {
         crate::bind_keys(cx);
         let view = cx.new(|cx| {
@@ -40,25 +42,25 @@ fn fixture(cx: &mut gpui::TestAppContext) -> (Entity<HerdrWindow>, &mut VisualTe
     (view, cx)
 }
 
-fn draw(cx: &mut VisualTestContext) {
+pub(super) fn draw(cx: &mut VisualTestContext) {
     cx.update(|window, cx| {
         window.refresh();
         full_draw(window, cx).clear(cx);
     });
 }
 
-fn bounds(cx: &mut VisualTestContext, selector: &str) -> Option<Bounds<Pixels>> {
+pub(super) fn bounds(cx: &mut VisualTestContext, selector: &str) -> Option<Bounds<Pixels>> {
     let selector: &'static str = Box::leak(selector.to_owned().into_boxed_str());
     cx.debug_bounds(selector)
 }
 
-fn click(cx: &mut VisualTestContext, selector: &str) {
+pub(super) fn click(cx: &mut VisualTestContext, selector: &str) {
     let bounds = bounds(cx, selector).unwrap_or_else(|| panic!("{selector}"));
     cx.simulate_click(bounds.center(), Modifiers::default());
     draw(cx);
 }
 
-fn endpoint(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) -> String {
+pub(super) fn endpoint(view: &Entity<HerdrWindow>, cx: &mut VisualTestContext) -> String {
     cx.update(|_, cx| view.read(cx).endpoints[0].id.clone())
 }
 
@@ -112,16 +114,4 @@ fn needs_me_keeps_only_folders_waiting_on_the_user(cx: &mut gpui::TestAppContext
     assert!(bounds(cx, &format!("folder-{host}-w0")).is_none());
     click(cx, "folders-all");
     assert!(bounds(cx, &format!("folder-{host}-w0")).is_some());
-}
-
-#[gpui::test]
-fn terminals_opens_the_folders_workspace(cx: &mut gpui::TestAppContext) {
-    let (view, cx) = fixture(cx);
-    click(cx, "folder-part-terminals");
-    cx.update(|_, cx| {
-        let view = view.read(cx);
-        assert_eq!(view.activity_section(), None, "the terminals are shown");
-        assert_eq!(view.activity.return_to, Some(ActivityPanel::Folders));
-    });
-    assert!(bounds(cx, "folders").is_none());
 }

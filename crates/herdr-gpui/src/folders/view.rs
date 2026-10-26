@@ -35,8 +35,12 @@ impl HerdrWindow {
                 .child("Nothing needs you in any folder.")
                 .into_any_element(),
             Some(card) => match self.folders.part {
-                Part::Home => self.render_folder_home(&look, card, cx).into_any_element(),
                 Part::Changes => self.render_folder_changes(&look, card, cx),
+                // The other parts are a column beside the terminals, and
+                // never drawn as this page.
+                Part::Home | Part::Terminals | Part::Files => {
+                    self.render_folder_home(&look, card, cx).into_any_element()
+                }
             },
         };
         div()

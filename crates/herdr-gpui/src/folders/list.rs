@@ -1,7 +1,6 @@
 //! The folder list down the page's left side: a row per folder, its mark,
 //! name, branch, host, and badges for uncommitted files and its agent, and
-//! under the selected one the parts it holds. A part either fills the body
-//! (Home, Changes) or opens the workspace (Terminals, Files).
+//! under the selected one the parts it holds, each shown beside the list.
 
 use super::{
     Part,
@@ -12,19 +11,11 @@ use crate::{
     HerdrWindow,
     config::{corners, mix},
     devices_overview::Look,
-    sidebar::ActivityPanel,
 };
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
 
 pub(super) const LIST_WIDTH: f32 = 290.;
-
-/// What a part row does when clicked.
-#[derive(Clone, Copy)]
-enum Action {
-    Show(Part),
-    Open(ActivityPanel),
-}
 
 impl HerdrWindow {
     pub(super) fn render_folder_list(
@@ -162,8 +153,8 @@ impl HerdrWindow {
             .when(!open, |row| {
                 row.hover(|style| style.bg(rgb(mix(theme.surface, theme.foreground, 4))))
             })
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.select_folder(&clicked, Part::Home, cx);
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.select_folder(&clicked, None, window, cx);
             }))
             .child(mark(look, &card.name, 28.))
             .child(
@@ -201,35 +192,23 @@ impl HerdrWindow {
             .dirty
             .map(|dirty| dirty.files)
             .filter(|files| *files > 0);
-        let parts: [(&str, &str, &str, Option<usize>, Action); 4] = [
-            (
-                "home",
-                "Home",
-                "icons/pulse.svg",
-                None,
-                Action::Show(Part::Home),
-            ),
+        let parts: [(&str, &str, &str, Option<usize>, Part); 4] = [
+            ("home", "Home", "icons/pulse.svg", None, Part::Home),
             (
                 "terminals",
                 "Terminals",
                 "icons/terminal.svg",
                 Some(card.tabs).filter(|tabs| *tabs > 0),
-                Action::Open(ActivityPanel::Workspaces),
+                Part::Terminals,
             ),
             (
                 "changes",
                 "Changes",
                 "icons/git-branch.svg",
                 files,
-                Action::Show(Part::Changes),
+                Part::Changes,
             ),
-            (
-                "files",
-                "Files",
-                "icons/file.svg",
-                None,
-                Action::Open(ActivityPanel::Files),
-            ),
+            ("files", "Files", "icons/file.svg", None, Part::Files),
         ];
         div()
             .flex()
@@ -239,8 +218,8 @@ impl HerdrWindow {
             .my_1()
             .border_l_1()
             .border_color(rgb(theme.active))
-            .children(parts.into_iter().map(|(key, label, icon, count, action)| {
-                let picked = matches!(action, Action::Show(part) if part == self.folders.part);
+            .children(parts.into_iter().map(|(key, label, icon, count, part)| {
+                let picked = part == self.folders.part;
                 let selector = format!("folder-part-{key}");
                 let clicked = card.clone();
                 div()
@@ -261,15 +240,8 @@ impl HerdrWindow {
                         row.text_color(rgb(theme.subtext()))
                             .hover(|style| style.bg(rgb(theme.active)))
                     })
-                    .on_click(cx.listener(move |this, _, window, cx| match action {
-                        Action::Show(part) => this.select_folder(&clicked, part, cx),
-                        Action::Open(panel) => this.open_folder(
-                            clicked.endpoint_index,
-                            &clicked.workspace,
-                            panel,
-                            window,
-                            cx,
-                        ),
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.select_folder(&clicked, Some(part), window, cx);
                     }))
                     .child(
                         svg()
@@ -285,15 +257,6 @@ impl HerdrWindow {
                                 .text_size(look.small())
                                 .text_color(rgb(theme.muted))
                                 .child(count.to_string()),
-                        )
-                    })
-                    .when(matches!(action, Action::Open(_)), |row| {
-                        row.child(
-                            svg()
-                                .flex_none()
-                                .size(px(10.))
-                                .path("icons/arrow-right.svg")
-                                .text_color(rgb(theme.muted)),
                         )
                     })
             }))
