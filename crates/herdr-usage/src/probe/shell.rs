@@ -42,6 +42,13 @@ sys.stdout.write(str(v))' "$@" 2>/dev/null
 }
 "#;
 
+/// What a step printed, byte for byte, and whether it succeeded.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Raw {
+    pub success: bool,
+    pub stdout: Vec<u8>,
+}
+
 /// A `/bin/sh` on a remote host, fed one step at a time over SSH stdin. Each
 /// step ends with a marker carrying its exit status, so steps can be read
 /// back without closing the session.
@@ -166,6 +173,16 @@ impl Shell {
     /// Runs `step` and returns what it printed. A step that overruns breaks
     /// the session, since its output could still arrive later.
     pub fn run(&mut self, step: &str, timeout: Duration) -> Result<Output> {
+        let raw = self.run_bytes(step, timeout, LIMIT)?;
+        Ok(Output {
+            success: raw.success,
+            stdout: String::from_utf8_lossy(&raw.stdout).into_owned(),
+        })
+    }
+
+    /// [`Self::run`] for output that may be larger or not text: the bytes as
+    /// the step printed them, breaking the session past `limit`.
+    pub fn run_bytes(&mut self, step: &str, timeout: Duration, limit: usize) -> Result<Raw> {
         if self.broken {
             return Err(Error::Unreachable);
         }
@@ -183,15 +200,16 @@ impl Shell {
                         .trim()
                         .parse::<i32>()
                         .unwrap_or(1);
-                    let stdout = String::from_utf8_lossy(&self.buffer[..start]).into_owned();
+                    let stdout = self.buffer[..start].to_vec();
                     self.buffer.drain(..tail + newline + 1);
-                    return Ok(Output {
+                    return Ok(Raw {
                         success: status == 0,
                         stdout,
                     });
                 }
             }
-            if self.buffer.len() > LIMIT {
+            // Room for the marker line past the output itself.
+            if self.buffer.len() > limit.saturating_add(end.len() + 16) {
                 self.broken = true;
                 return Err(Error::Size);
             }

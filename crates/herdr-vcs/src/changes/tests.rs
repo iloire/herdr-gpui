@@ -117,8 +117,9 @@ fn deadline() -> Instant {
 }
 
 fn read_at(path: &Path) -> crate::Result<Checkout> {
-    let located = locate(path.to_str().unwrap(), deadline(), &|| false)?;
-    read(located, deadline(), &|| false)
+    let session = &mut Session::local();
+    let located = locate(session, path.to_str().unwrap(), deadline(), &|| false)?;
+    read(session, located, deadline(), &|| false)
 }
 
 struct Repo {
@@ -305,6 +306,7 @@ fn a_subfolder_locates_its_checkout_and_every_worktree_is_found() {
     repo.git(&["commit", "-m", "first"]);
     std::fs::create_dir(repo.path().join("sub")).unwrap();
     let located = locate(
+        &mut Session::local(),
         repo.path().join("sub").to_str().unwrap(),
         deadline(),
         &|| false,
@@ -325,7 +327,7 @@ fn a_subfolder_locates_its_checkout_and_every_worktree_is_found() {
         "agent",
         linked.to_str().unwrap(),
     ]);
-    let found: Vec<_> = worktrees(&located.path, deadline(), &|| false)
+    let found: Vec<_> = worktrees(&mut Session::local(), &located.path, deadline(), &|| false)
         .unwrap()
         .iter()
         .map(|path| canonical(path))
@@ -338,13 +340,27 @@ fn a_subfolder_locates_its_checkout_and_every_worktree_is_found() {
         ]
     );
     // Both worktrees share one common directory, which names the repository.
-    let from_linked = locate(linked.to_str().unwrap(), deadline(), &|| false).unwrap();
+    let from_linked = locate(
+        &mut Session::local(),
+        linked.to_str().unwrap(),
+        deadline(),
+        &|| false,
+    )
+    .unwrap();
     assert_eq!(
         canonical(&from_linked.common_dir),
         canonical(&located.common_dir)
     );
     let outside = tempfile::tempdir().unwrap();
-    assert!(locate(outside.path().to_str().unwrap(), deadline(), &|| false).is_err());
+    assert!(
+        locate(
+            &mut Session::local(),
+            outside.path().to_str().unwrap(),
+            deadline(),
+            &|| false
+        )
+        .is_err()
+    );
 }
 
 #[test]

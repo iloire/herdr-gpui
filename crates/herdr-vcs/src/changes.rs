@@ -1,13 +1,14 @@
-//! What the checkouts on this machine hold right now, for the Changes
+//! What a host's checkouts hold right now, for the Changes
 //! section: finding the checkout a directory sits in, every worktree of a
 //! repository, and the repositories under a folder; then, per checkout, its
 //! branch and how far it is from its upstream, its commits not yet on the
 //! remote's default branch, the files with uncommitted changes and their
-//! line counts, and its latest commits. Read-only Git children run by the
-//! caller off the UI thread; nothing here contacts a remote, so every count
-//! is against the last fetch.
+//! line counts, and its latest commits. Read-only Git children run through
+//! the caller's [`Session`] off the UI thread, on this machine or another
+//! host; nothing here contacts a Git remote, so every count is against the
+//! last fetch.
 
-use crate::git::git;
+use crate::host::Session;
 use std::{path::Path, time::Instant};
 
 /// Files listed per checkout; the rest are only counted.
@@ -130,11 +131,12 @@ pub struct Located {
 /// The checkout `directory` is in, from any folder inside it. A directory
 /// outside Git, or in a bare repository, is an error.
 pub fn locate(
+    session: &mut Session,
     directory: &str,
     deadline: Instant,
     cancelled: &impl Fn() -> bool,
 ) -> crate::Result<Located> {
-    let text = git(
+    let text = session.git(
         directory,
         &[
             "rev-parse",
@@ -161,23 +163,23 @@ pub fn locate(
 }
 
 /// Every worktree of the repository `checkout` belongs to, main checkout
-/// included, whose folder is still there.
+/// included, whose folder is still there. Git marks one whose folder is gone
+/// `prunable`, on whichever host the repository is; an older Git that does
+/// not lists it, and locating it then fails.
 pub fn worktrees(
+    session: &mut Session,
     checkout: &str,
     deadline: Instant,
     cancelled: &impl Fn() -> bool,
 ) -> crate::Result<Vec<String>> {
-    let text = git(
+    let text = session.git(
         checkout,
         &["worktree", "list", "--porcelain", "-z"],
         "list worktrees",
         deadline,
         cancelled,
     )?;
-    Ok(parse_worktrees(&text)
-        .into_iter()
-        .filter(|path| Path::new(path).is_dir())
-        .collect())
+    Ok(parse_worktrees(&text))
 }
 
 /// The repositories directly inside `root`: each folder holding a `.git`
@@ -200,12 +202,13 @@ pub fn repositories_in(root: &Path) -> Vec<String> {
 
 /// Reads the checkout at `located`.
 pub fn read(
+    session: &mut Session,
     located: Located,
     deadline: Instant,
     cancelled: &impl Fn() -> bool,
 ) -> crate::Result<Checkout> {
     let Located { path, common_dir } = located;
-    let status = git(
+    let status = session.git(
         &path,
         &[
             "status",
@@ -231,7 +234,7 @@ pub fn read(
     // An unborn branch has no HEAD to count lines against or log from.
     if born {
         // Counts are a nicety: a failure keeps the files without them.
-        if let Ok(numstat) = git(
+        if let Ok(numstat) = session.git(
             &path,
             &["diff", "--numstat", "-z", "HEAD"],
             "count changed lines",
@@ -240,7 +243,7 @@ pub fn read(
         ) {
             apply_numstat(&mut files, &numstat);
         }
-        let log = git(
+        let log = session.git(
             &path,
             &[
                 "log",
@@ -253,23 +256,24 @@ pub fn read(
             cancelled,
         )?;
         commits = parse_log(&log);
-        unmerged = default_branch(&path, deadline, cancelled)
+        unmerged = default_branch(session, &path, deadline, cancelled)
             // The branch tracking the default branch already says this
             // through ahead.
             .filter(|base| upstream.as_ref() != Some(base))
             .and_then(|base| {
                 let range = format!("{base}..HEAD");
-                let count = git(
-                    &path,
-                    &["rev-list", "--count", &range],
-                    "count unmerged commits",
-                    deadline,
-                    cancelled,
-                )
-                .ok()?
-                .trim()
-                .parse()
-                .ok()?;
+                let count = session
+                    .git(
+                        &path,
+                        &["rev-list", "--count", &range],
+                        "count unmerged commits",
+                        deadline,
+                        cancelled,
+                    )
+                    .ok()?
+                    .trim()
+                    .parse()
+                    .ok()?;
                 Some(Unmerged { base, count })
             });
     }
@@ -291,51 +295,59 @@ pub fn read(
 
 /// The remote's default branch as last fetched: what `origin/HEAD` names,
 /// else `origin/main` or `origin/master`, whichever exists.
-fn default_branch(path: &str, deadline: Instant, cancelled: &impl Fn() -> bool) -> Option<String> {
-    let named = git(
-        path,
-        &["rev-parse", "--abbrev-ref", "origin/HEAD"],
-        "find the default branch",
-        deadline,
-        cancelled,
-    )
-    .ok()
-    .filter(|name| !name.is_empty() && name != "origin/HEAD");
+fn default_branch(
+    session: &mut Session,
+    path: &str,
+    deadline: Instant,
+    cancelled: &impl Fn() -> bool,
+) -> Option<String> {
+    let named = session
+        .git(
+            path,
+            &["rev-parse", "--abbrev-ref", "origin/HEAD"],
+            "find the default branch",
+            deadline,
+            cancelled,
+        )
+        .ok()
+        .filter(|name| !name.is_empty() && name != "origin/HEAD");
     named.or_else(|| {
         ["origin/main", "origin/master"]
             .into_iter()
             .find_map(|name| {
                 let reference = format!("refs/remotes/{name}");
-                git(
-                    path,
-                    &["rev-parse", "--verify", "--quiet", &reference],
-                    "find the default branch",
-                    deadline,
-                    cancelled,
-                )
-                .ok()
-                .map(|_| name.to_owned())
+                session
+                    .git(
+                        path,
+                        &["rev-parse", "--verify", "--quiet", &reference],
+                        "find the default branch",
+                        deadline,
+                        cancelled,
+                    )
+                    .ok()
+                    .map(|_| name.to_owned())
             })
     })
 }
 
 /// `git worktree list --porcelain -z`: each record's `worktree` path,
-/// leaving out bare repositories, which have no working tree.
+/// leaving out bare repositories, which have no working tree, and prunable
+/// ones, whose folder is gone.
 pub(crate) fn parse_worktrees(text: &str) -> Vec<String> {
     let mut paths = Vec::new();
     let mut current: Option<&str> = None;
-    let mut bare = false;
+    let mut skip = false;
     // Records end with an empty field.
     for field in text.split('\0').chain(std::iter::once("")) {
         if field.is_empty() {
-            if let Some(path) = current.take().filter(|_| !bare) {
+            if let Some(path) = current.take().filter(|_| !skip) {
                 paths.push(path.to_owned());
             }
-            bare = false;
+            skip = false;
         } else if let Some(path) = field.strip_prefix("worktree ") {
             current = Some(path);
-        } else if field == "bare" {
-            bare = true;
+        } else if field == "bare" || field == "prunable" || field.starts_with("prunable ") {
+            skip = true;
         }
     }
     paths

@@ -14,5 +14,6 @@ pub mod code_index;
 pub mod context;
 mod error;
 pub mod git;
+pub mod host;
 
 pub use error::{Error, Result};

@@ -6,7 +6,10 @@
 //! config names reports a failure.
 
 use super::{Failed, Read, Shown, Workspace, group};
-use herdr_vcs::changes::{self, Located};
+use herdr_vcs::{
+    changes::{self, Located},
+    host::Session,
+};
 use std::{
     path::PathBuf,
     time::{Duration, Instant},
@@ -85,12 +88,13 @@ impl Found {
 /// once `cancelled` says so.
 pub(crate) fn discover(targets: &Targets, cancelled: &impl Fn() -> bool) -> Read {
     let deadline = || Instant::now() + TIMEOUT;
+    let session = &mut Session::local();
     let mut found = Found::default();
     for (directory, workspaces) in &targets.open {
         if cancelled() {
             return Read::default();
         }
-        if let Ok(located) = changes::locate(directory, deadline(), cancelled) {
+        if let Ok(located) = changes::locate(session, directory, deadline(), cancelled) {
             found.add(located, workspaces);
         }
     }
@@ -106,7 +110,7 @@ pub(crate) fn discover(targets: &Targets, cancelled: &impl Fn() -> bool) -> Read
         if cancelled() {
             return Read::default();
         }
-        match changes::locate(&path, deadline(), cancelled) {
+        match changes::locate(session, &path, deadline(), cancelled) {
             Ok(located) => found.add(located, &[]),
             Err(error) => found.failed.push(Failed { label: path, error }),
         }
@@ -126,14 +130,14 @@ pub(crate) fn discover(targets: &Targets, cancelled: &impl Fn() -> bool) -> Read
         if cancelled() {
             return Read::default();
         }
-        let Ok(worktrees) = changes::worktrees(&path, deadline(), cancelled) else {
+        let Ok(worktrees) = changes::worktrees(session, &path, deadline(), cancelled) else {
             continue;
         };
         for worktree in worktrees {
             if found.knows(&worktree) {
                 continue;
             }
-            if let Ok(located) = changes::locate(&worktree, deadline(), cancelled) {
+            if let Ok(located) = changes::locate(session, &worktree, deadline(), cancelled) {
                 found.add(located, &[]);
             }
         }
@@ -145,7 +149,7 @@ pub(crate) fn discover(targets: &Targets, cancelled: &impl Fn() -> bool) -> Read
             return Read::default();
         }
         let label = located.path.clone();
-        match changes::read(located, deadline(), cancelled) {
+        match changes::read(session, located, deadline(), cancelled) {
             Ok(checkout) => shown.push(Shown {
                 checkout,
                 workspaces,

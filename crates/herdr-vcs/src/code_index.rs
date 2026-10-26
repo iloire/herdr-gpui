@@ -28,7 +28,7 @@ const MAX_FILES: usize = 100_000;
 /// The longest file listing read from Git.
 const MAX_LISTING_BYTES: usize = 32 << 20;
 /// Larger files are generated or data, and are listed but not scanned.
-const MAX_SCANNED_BYTES: u64 = 1 << 20;
+pub(crate) const MAX_SCANNED_BYTES: u64 = 1 << 20;
 /// The most definitions kept from one file, and from the whole checkout.
 const MAX_PER_FILE: usize = 5_000;
 const MAX_SYMBOLS: usize = 300_000;

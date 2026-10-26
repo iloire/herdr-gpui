@@ -20,7 +20,7 @@ use zeroize::Zeroizing;
 
 mod shell;
 
-pub use shell::Shell;
+pub use shell::{Raw, Shell};
 
 /// Responses and files larger than this are refused rather than truncated.
 pub(super) const LIMIT: usize = 1024 * 1024;

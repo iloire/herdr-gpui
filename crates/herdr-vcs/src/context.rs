@@ -6,7 +6,10 @@
 //! so a strip can read them as often as it reads status. Read-only, run by
 //! the caller off the UI thread; nothing contacts a remote.
 
-use crate::changes::{self, Checkout};
+use crate::{
+    changes::{self, Checkout},
+    host::Session,
+};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -73,19 +76,21 @@ pub fn read(
     deadline: Instant,
     cancelled: &impl Fn() -> bool,
 ) -> crate::Result<Context> {
-    let located = changes::locate(directory, deadline, cancelled)?;
+    // The state beside the checkout reads Git's own files, so this machine's.
+    let session = &mut Session::local();
+    let located = changes::locate(session, directory, deadline, cancelled)?;
     let state = state(Path::new(&located.path), Path::new(&located.common_dir));
     let path = located.path.clone();
-    let checkout = changes::read(located, deadline, cancelled)?;
+    let checkout = changes::read(session, located, deadline, cancelled)?;
     // The other worktrees are a nicety: a failure keeps the checkout.
-    let others = changes::worktrees(&path, deadline, cancelled).unwrap_or_default();
+    let others = changes::worktrees(session, &path, deadline, cancelled).unwrap_or_default();
     let mut worktrees = Vec::new();
     for other in others.iter().filter(|other| **other != path) {
         if worktrees.len() == MAX_WORKTREES || cancelled() {
             break;
         }
-        let read = changes::locate(other, deadline, cancelled)
-            .and_then(|located| changes::read(located, deadline, cancelled));
+        let read = changes::locate(session, other, deadline, cancelled)
+            .and_then(|located| changes::read(session, located, deadline, cancelled));
         if let Ok(read) = read {
             worktrees.push(read);
         }

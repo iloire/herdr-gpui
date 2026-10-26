@@ -33,8 +33,10 @@ fn checkout_read(path: &Path) -> (Shown, Vec<String>) {
     let second = commit(path, "second.rs");
     std::fs::write(path.join("a"), "edited\n").unwrap();
     let deadline = Instant::now() + Duration::from_secs(10);
-    let located = herdr_vcs::changes::locate(path.to_str().unwrap(), deadline, &|| false).unwrap();
-    let checkout = herdr_vcs::changes::read(located, deadline, &|| false).unwrap();
+    let session = &mut herdr_vcs::host::Session::local();
+    let located =
+        herdr_vcs::changes::locate(session, path.to_str().unwrap(), deadline, &|| false).unwrap();
+    let checkout = herdr_vcs::changes::read(session, located, deadline, &|| false).unwrap();
     (shown(checkout, &["w0"]), vec![second, first])
 }
 
