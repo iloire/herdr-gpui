@@ -40,15 +40,11 @@ impl Look<'_> {
             .child(text.into())
     }
 
-    /// A status dot as the sidebar draws it: idle hollow, the rest filled.
+    /// A status mark as the sidebar draws it, in the configured icon set.
+    /// The sidebar's dots drop to its first line's middle; these rows center
+    /// the mark themselves.
     pub fn dot(&self, status: AgentStatus) -> Div {
-        let color = self.status(status);
-        let dot = div().flex_none().size(px(7.)).rounded_full();
-        if status == AgentStatus::Idle {
-            dot.border_1().border_color(rgb(color))
-        } else {
-            dot.bg(rgb(color))
-        }
+        crate::sidebar::status_indicator(status, self.ui, self.indicators).mt_0()
     }
 
     pub fn link(&self, link: Link) -> Div {
