@@ -20,6 +20,12 @@ impl HerdrWindow {
         self.folders.part == Part::Files
     }
 
+    /// Whether the window shows a folder's Files, which lists and shows
+    /// only files: its terminals wait under Terminals.
+    pub(crate) fn files_only(&self) -> bool {
+        self.folders_column() && self.folders_files()
+    }
+
     /// The column's width: the list, and for Files the tree beside it,
     /// each as dragged.
     pub(crate) fn folders_column_width(&self) -> f32 {

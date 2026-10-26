@@ -33,10 +33,10 @@ fn the_list_and_tree_resize_and_the_terminals_take_the_room(cx: &mut gpui::TestA
     // Beside the terminals it keeps that width, and the tree resizes too.
     click(cx, "folder-part-files");
     assert!((width(cx, "folders-list") - px(210.)).abs() <= px(4.));
-    let terminal = bounds(cx, "terminal").unwrap().left();
+    let terminal = bounds(cx, "stand-in").unwrap().left();
     drag(cx, "folders-tree-resize", px(-60.));
     assert!((width(cx, "files") - px(200.)).abs() <= px(4.));
-    let wider = bounds(cx, "terminal").unwrap().left();
+    let wider = bounds(cx, "stand-in").unwrap().left();
     assert!(
         (terminal - wider - px(60.)).abs() <= px(6.),
         "the terminals take the room: {terminal:?} {wider:?}"

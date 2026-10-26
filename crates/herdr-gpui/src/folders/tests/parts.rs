@@ -1,5 +1,5 @@
 use super::page::{bounds, click, draw, endpoint, fixture};
-use crate::{HerdrWindow, folders::Part};
+use crate::{HerdrWindow, browser::Pick, folders::Part};
 use gpui::{Entity, VisualTestContext};
 use std::sync::Arc;
 
@@ -54,18 +54,39 @@ fn terminals_stay_in_folders_beside_the_terminal_area(cx: &mut gpui::TestAppCont
 }
 
 #[gpui::test]
-fn files_shows_the_tree_between_the_list_and_the_terminals(cx: &mut gpui::TestAppContext) {
+fn files_shows_only_files_beside_the_tree(cx: &mut gpui::TestAppContext) {
     let (view, cx) = fixture(cx);
+    let host = endpoint(&view, cx);
+    // w0 holds the terminal tabs.
+    click(cx, &format!("folder-{host}-w0"));
+    click(cx, "folder-part-terminals");
+    focus(&view, "w0", cx);
+    let terminals = |cx: &mut VisualTestContext| {
+        cx.update(|_, cx| {
+            let view = view.read(cx);
+            let group = view.active_group().unwrap();
+            view.group_tabs(group, cx)
+                .iter()
+                .filter(|tab| matches!(tab, Pick::Herdr(_)))
+                .count()
+        })
+    };
+    assert_eq!(terminals(cx), 2, "Terminals lists them");
+    assert!(bounds(cx, "terminal").is_some());
     click(cx, "folder-part-files");
-    focus(&view, "w1", cx);
     assert!(
         cx.update(|_, cx| view.read(cx).files_view()),
         "file tabs list here"
     );
+    assert_eq!(terminals(cx), 0, "Files lists none");
     let list = bounds(cx, "folders-list").unwrap();
     let tree = bounds(cx, "files").unwrap();
-    let terminal = bounds(cx, "terminal").unwrap();
-    assert!(list.right() <= tree.left() && tree.right() <= terminal.left());
+    let prompt = bounds(cx, "stand-in").unwrap();
+    assert!(list.right() <= tree.left() && tree.right() <= prompt.left());
+    assert!(
+        bounds(cx, "terminal").is_none(),
+        "the terminal waits under Terminals"
+    );
     // Home is a page again, and the file tabs go back to Workspaces' rules.
     click(cx, "folder-part-home");
     assert!(bounds(cx, "folder-home").is_some());

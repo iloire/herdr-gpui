@@ -320,8 +320,11 @@ impl HerdrWindow {
     /// group shows it.
     fn workspace_tabs(&self, cx: &App) -> Vec<Pick> {
         let slots = self.group_slots();
+        let files_only = self.files_only();
         self.open_workspace_tabs(cx)
             .into_iter()
+            // A folder's Files lists no terminals, even one a group shows.
+            .filter(|pick| !(files_only && matches!(pick, Pick::Herdr(_))))
             .filter(|pick| {
                 !self.hides_tab(pick)
                     || slots
@@ -505,11 +508,17 @@ impl HerdrWindow {
     /// until the next tick forgets it.
     pub(crate) fn group_shown(&self, group: GroupId, cx: &App) -> Shown {
         let Some(layout) = self.layout() else {
-            return Shown::Terminal;
+            return if self.files_only() {
+                Shown::Empty
+            } else {
+                Shown::Terminal
+            };
         };
         let focused = |group| self.group_focused_tab(group);
         let shown = layout.shown(group, focused);
         match &shown {
+            // A folder's Files shows no terminal: its groups wait for a file.
+            Shown::Terminal | Shown::Elsewhere(_) if self.files_only() => Shown::Empty,
             Shown::Page(id) if store(cx).is_none_or(|store| store.get(*id).is_none()) => {
                 Shown::Empty
             }

@@ -48,6 +48,20 @@ impl HerdrWindow {
             .any(|view| view.focus.is_focused(window))
     }
 
+    /// Puts the keyboard in the code tab the group in use shows, if it shows
+    /// one. Whether it did.
+    pub(crate) fn focus_shown_code_tab(&self, window: &mut Window, cx: &mut App) -> bool {
+        let shown = self.active_group().map(|group| self.group_shown(group, cx));
+        let Some(crate::browser::Shown::Page(id)) = shown else {
+            return false;
+        };
+        let Some(view) = self.code_views.get(&id) else {
+            return false;
+        };
+        window.focus(&view.focus, cx);
+        true
+    }
+
     /// Whether tab `id` is a code tab holding edits not yet saved.
     pub(crate) fn unsaved_code_edits(&self, id: TabId, cx: &App) -> bool {
         self.code_editor(id)

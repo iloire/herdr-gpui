@@ -176,9 +176,16 @@ impl HerdrWindow {
                 }
                 self.focus_folders_page(window, cx);
             }
-            Part::Terminals | Part::Files => {
+            Part::Terminals => {
                 self.go_to_workspace(card.endpoint_index, &card.workspace, cx);
                 window.focus(&self.focus, cx);
+            }
+            // The keyboard goes to the file shown, never the hidden terminal.
+            Part::Files => {
+                self.go_to_workspace(card.endpoint_index, &card.workspace, cx);
+                if !self.focus_shown_code_tab(window, cx) {
+                    self.focus_folders_page(window, cx);
+                }
             }
         }
         cx.notify();

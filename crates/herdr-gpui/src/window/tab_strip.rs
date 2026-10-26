@@ -35,6 +35,8 @@ const LIFT_GROW: f32 = 5.;
 const THUMB_ALPHA: u32 = 0x80;
 const THUMB_HELD_ALPHA: u32 = 0xc0;
 
+/// What a folder's Files says where no file is open yet.
+const NO_FILE: &str = "Open a file from the tree on the left.";
 /// What a group without tabs says, where its tab would show.
 const NO_TABS: &str =
     "Open a terminal tab with \"+\", or another kind of tab from the \"\u{22ef}\" menu.";
@@ -629,6 +631,7 @@ impl HerdrWindow {
             }
             // A terminal group whose connection has not shown its tab yet.
             Shown::Terminal => ("".into(), "Opening\u{2026}"),
+            Shown::Empty if self.files_only() => ("".into(), NO_FILE),
             Shown::Empty if self.is_split() && self.group_tabs(slot.id, cx).is_empty() => {
                 ("No tabs".into(), NO_TABS)
             }
