@@ -3,6 +3,7 @@
 mod drag;
 mod edge_bar;
 mod home;
+mod menu;
 mod naming;
 mod new_button;
 mod page;

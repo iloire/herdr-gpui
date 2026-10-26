@@ -45,6 +45,8 @@ pub(crate) enum Page {
     Dialog(WorkspaceAction),
     /// One prompt sent to several agents, and their comparison.
     FanOut,
+    /// A folder row's context menu in the Folders list.
+    Folder,
     /// Names a saved SSH device's port to forward to this computer.
     ForwardPort,
     /// Titlebar Git actions for the focused checkout, and its commit dialog.
@@ -169,6 +171,7 @@ impl Page {
                 | Self::PaneProcesses
                 | Self::KillProcesses
                 | Self::Host
+                | Self::Folder
                 | Self::RemoveDevice
                 | Self::RemoveWsl
                 | Self::Git

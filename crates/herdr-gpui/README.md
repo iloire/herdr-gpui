@@ -2265,7 +2265,9 @@ window at once, and `herdr-gpui ui panel NAME` shows a section.
   of its own color down its left edge; the ports listening in it show
   under its branch, each opening in a click. Drag a folder to reorder it among its
   host's folders: the move goes to Herdr, so the sidebar and every other
-  client follow, and Escape drops it back where it was. The folder picked
+  client follow, and Escape drops it back where it was. Right-click a
+  folder for its menu: **Copy Path**, and **Open Folder** for a folder on
+  this computer (macOS and Linux). The folder picked
   unfolds into **Terminals**, **Changes**, and **Files**, and each folder
   opens at the part it was left on; a click on the open folder's own row
   shows its Home, an overview. Home and Changes fill the

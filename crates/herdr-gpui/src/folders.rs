@@ -24,6 +24,7 @@ mod column;
 mod drag;
 mod home;
 mod list;
+mod menu;
 mod model;
 mod view;
 
@@ -32,6 +33,7 @@ mod tests;
 
 use crate::{HerdrWindow, panel_resize::PanelWidth, sidebar::ActivityPanel};
 use gpui::{prelude::*, *};
+pub(crate) use menu::FolderMenu;
 use model::{Card, Host};
 use std::collections::HashMap;
 

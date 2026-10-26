@@ -135,6 +135,10 @@ impl HerdrWindow {
             self.tab_menu_key(event, window, cx);
             return;
         }
+        if self.menu.page == Some(Page::Folder) {
+            self.folder_menu_key(event, window, cx);
+            return;
+        }
         if self.menu.page == Some(Page::Group) {
             self.group_menu_key(event, window, cx);
             return;

@@ -236,6 +236,7 @@ impl HerdrWindow {
         let bar = format!("folder-bar-{}-{}", card.endpoint, card.workspace);
         let clicked = card.clone();
         let pressed = card.clone();
+        let menu = card.clone();
         let waiting = card.waiting();
         div()
             .id(SharedString::from(selector.clone()))
@@ -280,6 +281,13 @@ impl HerdrWindow {
                     if event.click_count == 1 {
                         this.press_folder(&pressed, event.position, cx);
                     }
+                }),
+            )
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+                    cx.stop_propagation();
+                    this.open_folder_menu(&menu, event.position, window, cx);
                 }),
             )
             // The open folder's row is its Home; another folder opens at
