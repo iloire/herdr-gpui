@@ -51,6 +51,7 @@ fn label(panel: ActivityPanel) -> &'static str {
         ActivityPanel::Overview => "Overview",
         ActivityPanel::Changes => "Changes",
         ActivityPanel::Files => "Files",
+        ActivityPanel::Folders => "Folders",
         ActivityPanel::Workspaces => "Workspaces",
         ActivityPanel::PullRequests => "Pull requests",
         ActivityPanel::Issues => "Issues",
@@ -63,7 +64,8 @@ fn icon(panel: ActivityPanel) -> &'static str {
     match panel {
         ActivityPanel::Overview => "icons/pulse.svg",
         ActivityPanel::Changes => "icons/git-branch.svg",
-        ActivityPanel::Files => "icons/folder.svg",
+        ActivityPanel::Files => "icons/file.svg",
+        ActivityPanel::Folders => "icons/folder.svg",
         ActivityPanel::Workspaces => "icons/terminal.svg",
         ActivityPanel::PullRequests => "icons/pull-request.svg",
         ActivityPanel::Issues => "icons/issue.svg",
@@ -332,6 +334,7 @@ impl HerdrWindow {
         match self.activity_section() {
             Some(
                 ActivityPanel::Overview
+                | ActivityPanel::Folders
                 | ActivityPanel::Changes
                 | ActivityPanel::Security
                 | ActivityPanel::Automations,
@@ -358,6 +361,7 @@ impl HerdrWindow {
         let section = match self.activity_section()? {
             ActivityPanel::Workspaces | ActivityPanel::Files => return None,
             ActivityPanel::Overview => self.render_overview(cx),
+            ActivityPanel::Folders => self.render_folders(cx),
             ActivityPanel::Changes => self.render_changes_section(cx),
             ActivityPanel::Security => self.render_security_section(window, cx),
             ActivityPanel::Automations => self.render_automations_section(cx),
@@ -690,6 +694,7 @@ fn panel_selector(panel: ActivityPanel) -> &'static str {
         ActivityPanel::Overview => "activity-overview",
         ActivityPanel::Changes => "activity-changes",
         ActivityPanel::Files => "activity-files",
+        ActivityPanel::Folders => "activity-folders",
         ActivityPanel::Workspaces => "activity-workspaces",
         ActivityPanel::PullRequests => "activity-pull-requests",
         ActivityPanel::Issues => "activity-issues",

@@ -193,6 +193,7 @@ impl HerdrWindow {
             find_memory: Default::default(),
             flash: None,
             focus,
+            folders: Default::default(),
             git: git::Git::default(),
             git_anchor: Default::default(),
             gui_config_diagnostic,

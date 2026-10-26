@@ -206,6 +206,7 @@ pub(crate) fn list_of(section: ActivityPanel) -> Option<List> {
         ActivityPanel::Overview
         | ActivityPanel::Changes
         | ActivityPanel::Files
+        | ActivityPanel::Folders
         | ActivityPanel::Security
         | ActivityPanel::Automations
         | ActivityPanel::Workspaces => None,

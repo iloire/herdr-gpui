@@ -80,7 +80,8 @@ fn size(text: std::ffi::OsString) -> Result<Size, CliError> {
 }
 
 /// The panel names `ui panel` takes, as its errors and help name them.
-const PANELS: &str = "workspaces|files|overview|changes|pull-requests|issues|security|automations";
+const PANELS: &str =
+    "workspaces|folders|files|overview|changes|pull-requests|issues|security|automations";
 
 pub(super) fn ui(args: &mut Args) -> Result<UiCommand, CliError> {
     let verb = args.verb().ok_or(CliError::MissingArgument {

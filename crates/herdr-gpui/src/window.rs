@@ -208,6 +208,8 @@ pub(crate) struct HerdrWindow {
     /// The brief message over the terminal, and when it stops showing.
     pub(crate) flash: Option<(Flash, std::time::Instant)>,
     pub(crate) focus: FocusHandle,
+    /// The activity bar's Folders section: every open workspace as a card.
+    pub(crate) folders: crate::folders::Page,
     pub(crate) git: git::Git,
     /// Where the titlebar's Git button last painted. The window owns it so a
     /// shortcut and a click open the Git menu at the same place.

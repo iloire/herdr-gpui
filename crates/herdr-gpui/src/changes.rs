@@ -268,9 +268,12 @@ pub(crate) fn repo_name(common_dir: &str) -> String {
 }
 
 impl HerdrWindow {
-    /// Whether the bar lists Changes, so there is a count to keep.
+    /// Whether the bar lists Changes, so there is a count to keep, or the
+    /// Folders page shows what the reads find.
     fn changes_wanted(&self) -> bool {
-        self.activity_bar_shown() && self.activity_panel_listed(ActivityPanel::Changes)
+        self.activity_bar_shown()
+            && (self.activity_panel_listed(ActivityPanel::Changes)
+                || self.activity_section() == Some(ActivityPanel::Folders))
     }
 
     /// Where this pass looks: every workspace folder and pane directory of
@@ -331,7 +334,10 @@ impl HerdrWindow {
             self.changes.refresh();
         }
         let now = Instant::now();
-        let interval = if self.activity_section() == Some(ActivityPanel::Changes) {
+        let interval = if matches!(
+            self.activity_section(),
+            Some(ActivityPanel::Changes | ActivityPanel::Folders)
+        ) {
             SHOWN
         } else {
             HIDDEN

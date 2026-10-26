@@ -697,6 +697,7 @@ pub(crate) fn fixture_window(window: &mut Window, cx: &mut Context<HerdrWindow>)
         key_layout: |_| None,
         file_transfer: None,
         files: Default::default(),
+        folders: Default::default(),
         presentation: Default::default(),
         wake: crate::endpoint::WakeClock::new(
             std::time::Instant::now(),

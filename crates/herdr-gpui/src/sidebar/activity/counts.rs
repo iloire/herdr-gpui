@@ -55,7 +55,7 @@ impl Counts {
         match panel {
             ActivityPanel::Overview => Some(self.needs),
             ActivityPanel::Changes => Some(self.changes),
-            ActivityPanel::Files | ActivityPanel::Workspaces => None,
+            ActivityPanel::Files | ActivityPanel::Folders | ActivityPanel::Workspaces => None,
             ActivityPanel::PullRequests => Some(self.pull_requests),
             ActivityPanel::Issues => Some(self.issues),
             ActivityPanel::Security => Some(self.security),

@@ -67,6 +67,7 @@ mod fan_out;
 mod files;
 mod find;
 mod folder;
+mod folders;
 mod font_picker;
 mod fonts;
 mod github;
