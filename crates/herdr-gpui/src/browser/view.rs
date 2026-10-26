@@ -355,6 +355,7 @@ impl HerdrWindow {
         self.poll_deliveries(cx);
         self.poll_reveal(window, cx);
         self.poll_reviews(cx);
+        self.release_code_pictures(window, cx);
         self.poll_code_views(cx);
         self.poll_tab_files(cx);
         self.sync_file_tabs(cx);

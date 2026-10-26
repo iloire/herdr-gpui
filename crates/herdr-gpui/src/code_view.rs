@@ -8,10 +8,14 @@
 //! restart: the editor, and the outline, read on the background executor
 //! and again after each save. The file is read again when it changes on
 //! disk (`browser::disk_watch`), and a markdown file's tab turns to its
-//! rendered page and back (`browser::markdown_toggle`).
+//! rendered page and back (`browser::markdown_toggle`). A picture's tab
+//! draws the picture instead (`picture`).
 
 mod edit;
+mod picture;
 mod render;
+
+pub(crate) use picture::is_picture;
 
 use crate::{
     HerdrWindow,
@@ -114,6 +118,10 @@ pub(crate) struct CodeView {
     pub(crate) focus: FocusHandle,
     editor: Entity<CodeEditor>,
     outline: Option<Arc<Outline>>,
+    /// A picture's, as last read, in place of the outline.
+    picture: Option<Result<picture::Picture, crate::backdrop::Error>>,
+    /// Textures of pictures since replaced, for the window to free.
+    released: Vec<Arc<RenderImage>>,
     show_outline: bool,
     /// The tab's width as last laid out, which decides whether the outline
     /// fits.
@@ -240,6 +248,8 @@ impl HerdrWindow {
                 focus,
                 editor,
                 outline: None,
+                picture: None,
+                released: Vec::new(),
                 show_outline: true,
                 width: Rc::default(),
                 load: 0,
@@ -250,7 +260,7 @@ impl HerdrWindow {
         true
     }
 
-    /// Reads tab `id`'s outline off the UI thread.
+    /// Reads tab `id`'s outline, or its picture, off the UI thread.
     pub(crate) fn load_code_view(&mut self, id: TabId, cx: &mut Context<Self>) {
         let Some(Location::Code { file }) = cx
             .try_global::<Store>()
@@ -265,6 +275,26 @@ impl HerdrWindow {
         view.load += 1;
         let load = view.load;
         let path = std::path::PathBuf::from(&file.path);
+        if is_picture(&path) {
+            let read = cx
+                .background_executor()
+                .spawn(async move { picture::Picture::read(&path) });
+            cx.spawn(async move |this, cx| {
+                let picture = read.await;
+                let _ = this.update(cx, |this, cx| {
+                    if let Some(view) = this.code_views.get_mut(&id)
+                        && view.load == load
+                    {
+                        if let Some(Ok(old)) = view.picture.replace(picture) {
+                            view.released.push(old.texture);
+                        }
+                        cx.notify();
+                    }
+                });
+            })
+            .detach();
+            return;
+        }
         let read = cx
             .background_executor()
             .spawn(async move { Outline::read(&path).map(Arc::new) });

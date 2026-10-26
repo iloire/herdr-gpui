@@ -1,5 +1,6 @@
-//! A code tab draws its editor beside the file's outline, under a header
-//! naming the file; reading and editing live elsewhere.
+//! A code tab draws its editor beside the file's outline, or a picture
+//! (`picture`), under a header naming the file; reading and editing live
+//! elsewhere.
 
 use super::{CodeView, Outline};
 use crate::{
@@ -130,7 +131,7 @@ impl HerdrWindow {
                 .hover(|button| button.bg(rgb(theme.active)))
                 .child(label)
         };
-        div()
+        let header = div()
             .flex_none()
             .px(px(10.))
             .py(px(6.))
@@ -146,7 +147,12 @@ impl HerdrWindow {
                     .truncate()
                     .text_color(rgb(theme.muted))
                     .child(path),
-            )
+            );
+        // A picture has no text to edit or outline.
+        if let Some(path) = super::picture::of(tab) {
+            return header.children(self.picture_header(view, path));
+        }
+        header
             .children(self.code_edit_header(id, view, cx))
             .child(
                 button(
@@ -190,6 +196,7 @@ impl HerdrWindow {
                 .size_full()
                 .into_any_element();
         };
+        let picture = super::picture::of(tab).is_some();
         let look = self.code_look();
         view.editor
             .update(cx, |editor, cx| editor.set_look(look, cx));
@@ -213,14 +220,17 @@ impl HerdrWindow {
             .bg(rgb(self.theme.background))
             .child(measure(view.width.clone()))
             .child(self.code_header(id, tab, view, cx))
-            .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .flex()
-                    .child(div().flex_1().min_w_0().child(view.editor.clone()))
-                    .children(outline),
-            )
+            .when(picture, |tab| tab.child(self.picture_body(view)))
+            .when(!picture, |tab| {
+                tab.child(
+                    div()
+                        .flex_1()
+                        .min_h_0()
+                        .flex()
+                        .child(div().flex_1().min_w_0().child(view.editor.clone()))
+                        .children(outline),
+                )
+            })
             .into_any_element()
     }
 }

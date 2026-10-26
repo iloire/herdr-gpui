@@ -59,6 +59,11 @@ pub enum Error {
 /// Decodes the picture at `path` into the BGRA texture GPUI uploads, scaled
 /// to fit `MAX_TEXTURE_SIDE`. Blocking: run it on a background thread.
 pub(crate) fn decode(path: &Path) -> Result<RenderImage, Error> {
+    decode_sized(path).map(|(texture, _)| texture)
+}
+
+/// As `decode`, with the picture's own width and height before scaling.
+pub(crate) fn decode_sized(path: &Path) -> Result<(RenderImage, (u32, u32)), Error> {
     let read = |source| Error::Read {
         path: path.to_path_buf(),
         source,
@@ -106,8 +111,9 @@ pub(crate) fn decode(path: &Path) -> Result<RenderImage, Error> {
     limits.max_image_height = Some(MAX_DECODE_SIDE);
     limits.max_alloc = Some(MAX_DECODE_BYTES);
     reader.limits(limits);
-    let picture = fit(reader.decode().map_err(decoding)?);
-    Ok(texture(picture.into_rgba8()))
+    let picture = reader.decode().map_err(decoding)?;
+    let size = (picture.width(), picture.height());
+    Ok((texture(fit(picture).into_rgba8()), size))
 }
 
 /// Scales `picture` down to fit `MAX_TEXTURE_SIDE`, keeping its aspect. The
