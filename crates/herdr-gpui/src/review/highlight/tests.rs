@@ -139,3 +139,5 @@ fn only_the_start_of_a_very_long_line_is_coloured() {
     assert!(!spans.is_empty());
     assert!(spans.iter().all(|span| span.end <= MAX_COLOURED_BYTES));
 }
+
+mod languages;

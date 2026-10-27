@@ -5,7 +5,8 @@
 //! added lines in the new file's, unchanged lines in both; every hunk starts
 //! afresh, since the lines between hunks are not in the diff. Tokens are
 //! classified, not coloured: the window colours each class from its own
-//! theme, so a theme change recolours the diff.
+//! theme, so a theme change recolours the diff. The grammars are bat's set,
+//! through two-face, since syntect's own has no TypeScript.
 use super::diff::{Kind, Lines};
 use std::ops::Range;
 use std::sync::OnceLock;
@@ -40,8 +41,18 @@ const WARM_UP: usize = 200;
 /// The bundled grammars, loaded once, on the first diff that needs them.
 fn syntaxes() -> &'static SyntaxSet {
     static SYNTAXES: OnceLock<SyntaxSet> = OnceLock::new();
-    SYNTAXES.get_or_init(SyntaxSet::load_defaults_newlines)
+    SYNTAXES.get_or_init(two_face::syntax::extra_newlines)
 }
+
+/// Extensions the set does not claim, and the grammar that reads them.
+/// TypeScriptReact reads JSX, which plain JavaScript does not.
+const ALIASES: &[(&str, &str)] = &[
+    // keep-sorted start
+    ("cjs", "js"),
+    ("jsx", "tsx"),
+    ("mjs", "js"),
+    // keep-sorted end
+];
 
 /// Scope prefixes and what they mean, most specific first.
 fn classes() -> &'static [(Scope, Token)] {
@@ -69,6 +80,13 @@ fn classes() -> &'static [(Scope, Token)] {
             ("storage.type.impl", Token::Keyword),
             ("storage.type.class", Token::Keyword),
             ("storage.type.module", Token::Keyword),
+            ("storage.type.interface", Token::Keyword),
+            ("storage.type.type", Token::Keyword),
+            // JavaScript and TypeScript mark `const`, `let`, and `var` as
+            // plain storage types; their types are `support.type`.
+            ("storage.type.js", Token::Keyword),
+            ("storage.type.ts", Token::Keyword),
+            ("storage.type.tsx", Token::Keyword),
             ("storage.type", Token::Type),
             ("support.type", Token::Type),
             ("support.class", Token::Type),
@@ -150,16 +168,29 @@ fn apply(stack: &mut ScopeStack, op: &ScopeStackOp) -> Result<(), syntect::parsi
     stack.apply(op).map(|_| ())
 }
 
-/// The grammar for a file, by its extension.
-fn grammar(name: &str) -> Option<&'static SyntaxReference> {
-    let extension = std::path::Path::new(name).extension()?.to_str()?;
-    syntaxes().find_syntax_by_extension(extension)
+/// The grammar for a file: by its extension, then its whole name (such as
+/// `Dockerfile`), then a shebang or mode line in `first_line` when known.
+fn grammar(name: &str, first_line: Option<&str>) -> Option<&'static SyntaxReference> {
+    let set = syntaxes();
+    let path = std::path::Path::new(name);
+    let by_extension = || {
+        let extension = path.extension()?.to_str()?;
+        let extension = ALIASES
+            .iter()
+            .find(|(alias, _)| alias.eq_ignore_ascii_case(extension))
+            .map_or(extension, |(_, target)| target);
+        set.find_syntax_by_extension(extension)
+    };
+    let by_name = || set.find_syntax_by_extension(path.file_name()?.to_str()?);
+    by_extension()
+        .or_else(by_name)
+        .or_else(|| set.find_syntax_by_first_line(first_line?))
 }
 
 /// The spans of each line of `lines` in `range`, a stretch of one hunk,
 /// for a file named `name`. Blocking: it runs on the background executor.
 pub(crate) fn colour(name: &str, lines: &Lines, range: Range<usize>) -> Vec<Vec<Span>> {
-    let Some(syntax) = grammar(name) else {
+    let Some(syntax) = grammar(name, None) else {
         return vec![Vec::new(); range.len()];
     };
     let (mut old, mut new) = (Side::new(syntax), Side::new(syntax));
@@ -191,7 +222,7 @@ pub(crate) fn colour(name: &str, lines: &Lines, range: Range<usize>) -> Vec<Vec<
 /// named `name`, read top to bottom. Blocking: it runs on the background
 /// executor.
 pub(crate) fn colour_file(name: &str, text: &str, limit: usize) -> Vec<Vec<Span>> {
-    let Some(syntax) = grammar(name) else {
+    let Some(syntax) = grammar(name, text.lines().next()) else {
         return Vec::new();
     };
     let mut side = Side::new(syntax);

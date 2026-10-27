@@ -146,9 +146,11 @@ skrifa               = { default-features = false, features = ["std"], version =
 # Tests hold a port with a socket that is bound but never listens; mdns-sd
 # already locks this version.
 socket2              = "0.6.5"
-# Diff syntax colouring: bundled grammars, parsed with the pure-Rust regex
-# engine, no themes (colours come from the app's theme).
-syntect              = { default-features = false, features = ["default-syntaxes", "parsing", "regex-fancy"], version = "5.3" }
+# Syntax colouring of diffs and files, parsed with the pure-Rust regex engine,
+# no themes (colours come from the app's theme). two-face supplies the
+# grammars: bat's set, which has TypeScript, TSX, SCSS, TOML, and more that
+# syntect's bundled set lacks.
+syntect              = { default-features = false, features = ["parsing", "regex-fancy"], version = "5.3" }
 # The version GPUI's screen capture already locks; only CPU and memory are read.
 sysinfo              = { default-features = false, features = ["disk", "system"], version = "0.39.6" }
 tar                  = "0.4"
@@ -180,6 +182,7 @@ tracing              = "0.1"
 # The Azure sandbox exec stream; TLS comes from `rustls` above.
 tungstenite          = { default-features = false, features = ["handshake"], version = "0.30" }
 tracing-subscriber   = { default-features = false, features = ["registry", "std"], version = "0.3" }
+two-face             = { default-features = false, features = ["syntect-fancy"], version = "0.5.2" }
 unicode-normalization = "0.1.26"
 unicode-properties   = { version = "0.1.4", default-features = false, features = ["emoji"] }
 unicode-segmentation = "1"

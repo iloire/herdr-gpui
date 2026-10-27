@@ -4885,6 +4885,7 @@ dependencies = [
  "toml_edit 0.25.15+spec-1.1.0",
  "tracing",
  "tracing-subscriber",
+ "two-face",
  "unicode-properties",
  "unicode-segmentation",
  "unicode-width",
@@ -10399,6 +10400,17 @@ dependencies = [
  "rand 0.10.3",
  "sha1",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "two-face"
+version = "0.5.2+bat-0.26.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "915be7adc2ff6f4338acbf71f3eda0a146f46003b992a1669c674308610efdac"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "syntect",
 ]
 
 [[package]]

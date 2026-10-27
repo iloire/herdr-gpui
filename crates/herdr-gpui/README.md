@@ -2744,7 +2744,10 @@ next to the agent that is changing the code.
   an outline entry to jump to it, or a line to mark it. `j`/`k` and the arrows
   scroll, Space and Page Up/Down page, `g`/`G` go to the top and bottom, `o`
   shows or hides the outline, and `e` opens the marked line, or the top line in
-  view, in your editor.
+  view, in your editor. Colouring covers about 200 languages (bat's set),
+  including TypeScript, TSX, JSX, JavaScript, HTML, CSS, SCSS, and TOML, and
+  finds a file's language by its extension, its name (`Dockerfile`), or a
+  `#!` line.
 
 The editor is `$VISUAL`, then `$EDITOR`, then `vi`, as the new pane's shell
 sees them, started as `EDITOR +LINE FILE`. Set `editor_command` to choose
