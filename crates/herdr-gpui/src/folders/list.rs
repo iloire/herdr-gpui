@@ -1,6 +1,7 @@
 //! The folder list down the page's left side: a row per folder, its name,
 //! branch, host, and badges for uncommitted files and its agent, and
-//! under the selected one the parts it holds, each shown beside the list.
+//! under the selected one the parts it holds, each shown beside the list,
+//! and the ports its processes listen on.
 //! The selected folder's own row is its Home.
 
 use super::{
@@ -156,7 +157,7 @@ impl HerdrWindow {
             .hover(|style| style.bg(rgb(theme.active)))
             .tooltip(move |_, cx| {
                 cx.new(|_| crate::menu::SettingsHint {
-                    text: "Open project".into(),
+                    text: "Add a folder".into(),
                     foreground,
                     surface,
                 })
@@ -306,17 +307,6 @@ impl HerdrWindow {
                     .child(super::view::path_line(look, card))
                     .when(card.shows_branch(), |column| {
                         column.child(super::view::branch_line(look, card))
-                    })
-                    // What runs here, under the branch, so it is seen
-                    // without opening the folder's Home.
-                    .when_some(self.folder_ports(look, card, cx), |column, ports| {
-                        let selector = format!("folder-ports-{}", card.workspace);
-                        column.child(
-                            div()
-                                .debug_selector(move || selector.clone())
-                                .text_size(look.small())
-                                .child(ports),
-                        )
                     }),
             )
             .when_some(card.host.clone(), |row, host| {
@@ -420,5 +410,17 @@ impl HerdrWindow {
                         )
                     })
             }))
+            // What runs here, last among the parts so the folder's own row
+            // stays short; each port opens on its own click.
+            .when_some(self.folder_ports(look, card, cx), |parts, ports| {
+                let selector = format!("folder-ports-{}", card.workspace);
+                parts.child(
+                    div()
+                        .debug_selector(move || selector.clone())
+                        .px_2()
+                        .py_1()
+                        .child(ports),
+                )
+            })
     }
 }
