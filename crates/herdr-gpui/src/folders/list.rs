@@ -15,6 +15,7 @@ use crate::{
     config::{corners, mix},
     devices_overview::Look,
     panel_resize::PanelDrag,
+    sidebar::ActivityPanel,
 };
 use gpui::{prelude::*, *};
 use herdr_client::protocol::AgentStatus;
@@ -333,6 +334,9 @@ impl HerdrWindow {
             .map(|dirty| dirty.files)
             .filter(|files| *files > 0);
         let ahead = card.ahead;
+        let issues = self
+            .folder_open_issues(card, cx)
+            .filter(|issues| *issues > 0);
         let parts: [(&str, &str, &str, Option<usize>, Part); 3] = [
             (
                 "terminals",
@@ -359,46 +363,11 @@ impl HerdrWindow {
             .border_l_1()
             .border_color(rgb(theme.active))
             .children(parts.into_iter().map(|(key, label, icon, count, part)| {
-                let picked = part == self.folders.part;
-                let selector = format!("folder-part-{key}");
                 let clicked = card.clone();
-                div()
-                    .id(SharedString::from(selector.clone()))
-                    .debug_selector(move || selector.clone())
-                    .flex()
-                    .items_center()
-                    .gap_2()
-                    .px_2()
-                    .py_1()
-                    .rounded(px(corners::SMALL))
-                    .cursor_pointer()
-                    .when(picked, |row| {
-                        row.bg(rgb(theme.primary_wash()))
-                            .font_weight(FontWeight::SEMIBOLD)
-                    })
-                    .when(!picked, |row| {
-                        row.text_color(rgb(theme.subtext()))
-                            .hover(|style| style.bg(rgb(theme.active)))
-                    })
+                part_row(look, key, label, icon, count, part == self.folders.part)
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.select_folder(&clicked, Some(part), window, cx);
                     }))
-                    .child(
-                        svg()
-                            .flex_none()
-                            .size(px(13.))
-                            .path(icon)
-                            .text_color(rgb(theme.muted)),
-                    )
-                    .child(div().flex_1().min_w_0().truncate().child(label))
-                    .when_some(count, |row, count| {
-                        row.child(
-                            div()
-                                .text_size(look.small())
-                                .text_color(rgb(theme.muted))
-                                .child(count.to_string()),
-                        )
-                    })
                     // Commits not pushed yet, as the branch line marks them.
                     .when(part == Part::Changes && ahead > 0, |row| {
                         row.child(
@@ -410,6 +379,24 @@ impl HerdrWindow {
                         )
                     })
             }))
+            // The repository's open issues live in the Issues section, so
+            // the row opens it narrowed to this project rather than a part.
+            .when_some(issues, |parts, issues| {
+                let clicked = card.clone();
+                parts.child(
+                    part_row(
+                        look,
+                        "issues",
+                        "Issues",
+                        "icons/issue.svg",
+                        Some(issues),
+                        false,
+                    )
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.open_folder_section(&clicked, ActivityPanel::Issues, None, window, cx);
+                    })),
+                )
+            })
             // What runs here, last among the parts so the folder's own row
             // stays short; each port opens on its own click.
             .when_some(self.folder_ports(look, card, cx), |parts, ports| {
@@ -423,4 +410,52 @@ impl HerdrWindow {
                 )
             })
     }
+}
+
+/// A row among the selected folder's parts: its icon, label, and count,
+/// marked when `picked`.
+fn part_row(
+    look: &Look,
+    key: &str,
+    label: &'static str,
+    icon: &'static str,
+    count: Option<usize>,
+    picked: bool,
+) -> Stateful<Div> {
+    let theme = look.theme;
+    let selector = format!("folder-part-{key}");
+    div()
+        .id(SharedString::from(selector.clone()))
+        .debug_selector(move || selector.clone())
+        .flex()
+        .items_center()
+        .gap_2()
+        .px_2()
+        .py_1()
+        .rounded(px(corners::SMALL))
+        .cursor_pointer()
+        .when(picked, |row| {
+            row.bg(rgb(theme.primary_wash()))
+                .font_weight(FontWeight::SEMIBOLD)
+        })
+        .when(!picked, |row| {
+            row.text_color(rgb(theme.subtext()))
+                .hover(|style| style.bg(rgb(theme.active)))
+        })
+        .child(
+            svg()
+                .flex_none()
+                .size(px(13.))
+                .path(icon)
+                .text_color(rgb(theme.muted)),
+        )
+        .child(div().flex_1().min_w_0().truncate().child(label))
+        .when_some(count, |row, count| {
+            row.child(
+                div()
+                    .text_size(look.small())
+                    .text_color(rgb(theme.muted))
+                    .child(count.to_string()),
+            )
+        })
 }

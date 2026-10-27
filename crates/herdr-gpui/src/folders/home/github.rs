@@ -35,6 +35,11 @@ pub(super) struct Github {
     synced: bool,
 }
 
+/// Whether `item` is an issue the Issues section lists as open.
+fn open_issue(item: &Item) -> bool {
+    item.pull_request.is_none() && !closed(item)
+}
+
 /// Newest change first; one never changed after.
 fn newest_first(a: &Item, b: &Item) -> std::cmp::Ordering {
     b.updated_at.cmp(&a.updated_at)
@@ -85,7 +90,7 @@ impl HerdrWindow {
                 Some(_) if matches!(item.state.as_str(), "open" | "draft") => {
                     pull_requests.push(item);
                 }
-                None if !closed(item) => issues.push(item),
+                _ if open_issue(item) => issues.push(item),
                 _ => {}
             }
         }
@@ -119,9 +124,24 @@ impl HerdrWindow {
         })
     }
 
+    /// How many issues `card`'s repository has open, by what the sections'
+    /// view last synced; `None` until it lists the repository.
+    pub(in crate::folders) fn folder_open_issues(&self, card: &Card, cx: &App) -> Option<usize> {
+        let key = self.folder_repo_key(card.endpoint_index, &card.workspace)?;
+        let view = self.section_view()?;
+        let (snapshot, _) = view.read(cx).home_repo(&key)?;
+        Some(
+            snapshot
+                .items
+                .iter()
+                .filter(|item| open_issue(item))
+                .count(),
+        )
+    }
+
     /// Shows `panel` narrowed to `card`'s project, with item `key`'s page
     /// open when given.
-    fn open_folder_section(
+    pub(in crate::folders) fn open_folder_section(
         &mut self,
         card: &Card,
         panel: ActivityPanel,

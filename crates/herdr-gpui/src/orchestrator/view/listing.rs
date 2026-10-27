@@ -94,6 +94,11 @@ impl OrchestratorView {
             .map(|repo| (&repo.snapshot, repo.login.as_deref()))
     }
 
+    #[cfg(test)]
+    pub(crate) fn repos_mut_for_tests(&mut self) -> impl Iterator<Item = &mut Repo> {
+        self.repos.iter_mut()
+    }
+
     /// Opens item `key`'s page, as a click on its row does.
     pub(crate) fn open_item(&mut self, key: String, cx: &mut Context<Self>) {
         self.selected = Some(key.clone());

@@ -4,6 +4,7 @@ mod branch_line;
 mod drag;
 mod edge_bar;
 mod home;
+mod issues;
 mod menu;
 mod naming;
 mod new_button;
