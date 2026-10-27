@@ -106,6 +106,44 @@ impl Tree {
         rows
     }
 
+    /// The rows of the files `query` matches and the folders holding them,
+    /// every one of those open. The query is matched without case against
+    /// a file's name, or its whole path once it holds a `/`.
+    pub(crate) fn matching(&self, query: &str) -> Vec<Row> {
+        let query = query.to_lowercase();
+        let mut rows = Vec::new();
+        self.collect_matching(0, 0, &query, &mut rows);
+        rows
+    }
+
+    /// Appends the matching rows under `node`; whether it found any.
+    fn collect_matching(&self, node: usize, depth: u16, query: &str, rows: &mut Vec<Row>) -> bool {
+        let start = rows.len();
+        for &child in self.children(node) {
+            let row = Row { node: child, depth };
+            let found = &self.nodes[child];
+            match found.entry {
+                Entry::Folder(_) => {
+                    rows.push(row);
+                    if !self.collect_matching(child, depth.saturating_add(1), query, rows) {
+                        rows.pop();
+                    }
+                }
+                Entry::File(_) => {
+                    let text = if query.contains('/') {
+                        &found.path
+                    } else {
+                        &found.name
+                    };
+                    if text.to_lowercase().contains(query) {
+                        rows.push(row);
+                    }
+                }
+            }
+        }
+        rows.len() > start
+    }
+
     fn children(&self, node: usize) -> &[usize] {
         match &self.nodes[node].entry {
             Entry::Folder(children) => children,

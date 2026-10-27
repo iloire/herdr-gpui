@@ -4,7 +4,8 @@
 //! checkout. A file opens in a code tab beside the terminals, a markdown
 //! file rendered (see `browser::markdown_toggle`), or with the secondary
 //! modifier in the terminal editor beside the focused pane. A right-click
-//! opens the row's menu (see `menu`).
+//! opens the row's menu (see `menu`). The filter field sits under the
+//! header (see `filter`).
 
 use super::{
     Status,
@@ -68,8 +69,16 @@ impl HerdrWindow {
                 "No Git checkout to list at {}\n\n{error}",
                 self.files.followed().unwrap_or("this folder")
             )),
+            Status::Ready if self.files.filtering() && self.files.rows.is_empty() => {
+                Some("No file names match.".to_owned())
+            }
             Status::Ready => None,
         };
+        let column = column.children(
+            matches!(self.files.status, Status::Ready)
+                .then(|| self.files_filter_field(cx))
+                .flatten(),
+        );
         if let Some(message) = message {
             return column.child(
                 div()

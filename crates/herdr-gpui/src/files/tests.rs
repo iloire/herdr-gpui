@@ -8,6 +8,7 @@ use std::{
     sync::{Arc, atomic::AtomicBool},
 };
 
+mod filter;
 mod follow;
 mod menu;
 mod tree;

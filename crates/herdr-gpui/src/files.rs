@@ -10,9 +10,12 @@
 //! the background executor every few seconds while the section is shown and
 //! never while it is not. The changed files lead the tree, newest first.
 //!
+//! A field under the header filters the tree by file name (see `filter`).
+//!
 //! Only this computer's checkouts are read: a pane on an SSH host has its
 //! files there, out of reach of a local listing.
 
+mod filter;
 mod menu;
 mod render;
 mod tree;
@@ -80,6 +83,9 @@ pub(crate) struct Files {
     /// The followed folder relative to its checkout, to mark in the tree.
     pub(crate) here: Option<String>,
     pub(crate) rows: Vec<Row>,
+    /// What the filter field holds, trimmed; the whole tree when empty.
+    query: String,
+    filter: Option<filter::Filter>,
     /// The file last opened from the tree, relative to its checkout.
     pub(crate) selected: Option<String>,
     next: Option<Instant>,
@@ -100,6 +106,8 @@ impl Default for Files {
             reveal: false,
             here: None,
             rows: Vec::new(),
+            query: String::new(),
+            filter: None,
             selected: None,
             next: None,
             task: None,
@@ -143,13 +151,42 @@ impl Files {
         self.expanded.get(self.root()?)
     }
 
+    /// Whether the tree is narrowed to the files the filter matches.
+    pub(crate) fn filtering(&self) -> bool {
+        !self.query.is_empty()
+    }
+
+    /// Narrows the tree to `query`'s files. Clearing it opens the folders
+    /// down to the file last opened, so the tree shows where it sits.
+    fn set_query(&mut self, query: &str) {
+        let query = query.trim();
+        if query == self.query {
+            return;
+        }
+        if query.is_empty()
+            && let Some(root) = self.root().map(Path::to_path_buf)
+            && let Some(selected) = self.selected.as_deref()
+        {
+            let open = self.expanded.entry(root).or_default();
+            open.extend(tree::ancestors(selected).map(str::to_owned));
+        }
+        query.clone_into(&mut self.query);
+        self.lay_out();
+    }
+
     pub(crate) fn is_open(&self, folder: &str) -> bool {
-        self.open_folders()
-            .is_some_and(|open| open.contains(folder))
+        self.filtering()
+            || self
+                .open_folders()
+                .is_some_and(|open| open.contains(folder))
     }
 
     /// Opens or closes `folder` of the shown checkout.
     pub(crate) fn toggle(&mut self, folder: &str) {
+        // Every folder holding a match stays open while filtering.
+        if self.filtering() {
+            return;
+        }
         let Some(root) = self.root().map(Path::to_path_buf) else {
             return;
         };
@@ -202,6 +239,7 @@ impl Files {
 
     fn lay_out(&mut self) {
         self.rows = match (&self.listing, self.open_folders()) {
+            (Some(listing), _) if self.filtering() => listing.tree.matching(&self.query),
             (Some(listing), open) => listing.tree.rows(open.unwrap_or(&HashSet::new())),
             (None, _) => Vec::new(),
         };
@@ -253,6 +291,7 @@ impl HerdrWindow {
         if !self.files_view() {
             return;
         }
+        self.sync_files_filter(cx);
         if self.selected_is_remote() {
             if !matches!(self.files.status, Status::Remote) {
                 self.files.status = Status::Remote;
