@@ -84,7 +84,7 @@ fn plus_opens_a_tab_and_types_the_command(cx: &mut gpui::TestAppContext) {
     assert_eq!(tab["method"], "tab.create");
     assert_eq!(
         tab["params"],
-        json!({"workspace_id": "w1", "label": "claude", "focus": true, "cwd": "/repo"})
+        json!({"workspace_id": "w1", "focus": true, "cwd": "/repo"})
     );
     let created = json!({"result":{"type":"tab_created",
         "tab":{"tab_id":"w1:t9"},"root_pane":{"pane_id":"w1:p9"}}});

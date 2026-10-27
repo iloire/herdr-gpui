@@ -162,9 +162,10 @@ impl HerdrWindow {
             .map(|pane| pane.workspace_id.clone())
             .or_else(|| snapshot.focused_workspace_id.clone())
             .ok_or(Error::NoWorkspace)?;
+        // No label: Herdr keeps a label given here as one the user chose,
+        // so a tab-naming plugin would never name the tab after its work.
         let mut params = json!({
             "workspace_id": workspace,
-            "label": command.program(),
             "focus": true,
         });
         if let Some(cwd) = pane.and_then(|pane| pane.foreground_cwd.as_ref().or(pane.cwd.as_ref()))
