@@ -10,6 +10,7 @@ mod naming;
 mod new_button;
 mod page;
 mod parts;
+mod pending;
 mod ports;
 mod quiet;
 mod resize;

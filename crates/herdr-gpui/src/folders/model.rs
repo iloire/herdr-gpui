@@ -39,6 +39,8 @@ pub(crate) struct Card {
     pub checkout: Option<String>,
     /// Terminal tabs across the folder's workspaces.
     pub tabs: usize,
+    /// Of those, the tabs marked pending.
+    pub pending: usize,
     pub host: Option<String>,
     pub branch: Option<String>,
     pub ahead: usize,
@@ -57,6 +59,8 @@ pub(crate) struct Member {
     pub id: String,
     pub name: String,
     pub tabs: usize,
+    /// Of those, the tabs marked pending.
+    pub pending: usize,
     pub agent: Option<Agent>,
 }
 
@@ -118,15 +122,15 @@ impl Card {
     }
 
     /// Whether nothing in the folder asks for a look: its agent, if any,
-    /// is idle (finished and seen), and nothing waits to be committed or
-    /// pushed. The list dims such a row.
+    /// is idle (finished and seen), no tab is marked pending, and nothing
+    /// waits to be committed or pushed. The list dims such a row.
     pub(crate) fn quiet(&self) -> bool {
         let idle = self
             .agent
             .as_ref()
             .is_none_or(|agent| agent.state == State::Idle);
         let dirty = self.dirty.is_some_and(|dirty| dirty.files > 0);
-        idle && !dirty && self.ahead == 0
+        idle && self.pending == 0 && !dirty && self.ahead == 0
     }
 
     /// Whether the folder's agent waits on the user.
@@ -153,12 +157,15 @@ pub(crate) fn cards<'a>(hosts: impl IntoIterator<Item = Host<'a>>, rows: &[Row])
                     None => workspace.git_ahead_behind.unwrap_or_default(),
                 };
                 let id = workspace.workspace_id.as_str();
-                let tabs = host
+                let (tabs, pending) = host
                     .snapshot
                     .tabs
                     .iter()
                     .filter(|tab| tab.workspace_id == id)
-                    .count();
+                    .fold((0, 0), |(tabs, pending), tab| {
+                        let marked = crate::pending_tab::is_marked(&tab.label);
+                        (tabs + 1, pending + usize::from(marked))
+                    });
                 let agent = agent_of(rows, host.id, |open| open == id);
                 Card {
                     endpoint_index: host.index,
@@ -169,11 +176,13 @@ pub(crate) fn cards<'a>(hosts: impl IntoIterator<Item = Host<'a>>, rows: &[Row])
                         id: workspace.workspace_id.clone(),
                         name: workspace.label.clone(),
                         tabs,
+                        pending,
                         agent: agent.clone(),
                     }],
                     folder: workspace.new_workspace_cwd.clone(),
                     checkout: checkout.map(|checkout| checkout.path.clone()),
                     tabs,
+                    pending,
                     host: host.label.map(str::to_owned),
                     branch: checkout
                         .and_then(|checkout| checkout.branch.clone())
@@ -209,6 +218,7 @@ pub(crate) fn cards<'a>(hosts: impl IntoIterator<Item = Host<'a>>, rows: &[Row])
         match folders.iter_mut().find(same) {
             Some(folder) => {
                 folder.tabs += card.tabs;
+                folder.pending += card.pending;
                 folder.workspaces.extend(card.workspaces);
             }
             None => folders.push(card),

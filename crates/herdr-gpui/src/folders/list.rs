@@ -320,6 +320,9 @@ impl HerdrWindow {
             .when_some(card.host.clone(), |row, host| {
                 row.child(host_chip(look, host))
             })
+            .when(card.pending > 0, |row| {
+                row.child(pending_mark(look, &card.workspace, card.pending))
+            })
             .when_some(card.dirty.filter(|dirty| dirty.files > 0), |row, dirty| {
                 // Always the uncommitted hue: the agent's own mark beside it
                 // already says when it waits on you.
@@ -453,6 +456,9 @@ impl HerdrWindow {
                     Some(member.tabs).filter(|tabs| *tabs > 0),
                     picked,
                 )
+                .when(member.pending > 0, |row| {
+                    row.child(pending_mark(look, &member.id, member.pending))
+                })
                 .when_some(member.agent.as_ref(), |row, agent| {
                     row.child(look.dot(agent.state.status()))
                 })
@@ -468,6 +474,23 @@ impl HerdrWindow {
             })
             .collect()
     }
+}
+
+/// The pending mark the tab strip puts on a marked tab's title, in the same
+/// primary color, with how many tabs carry it when more than one does.
+fn pending_mark(look: &Look, workspace: &str, count: usize) -> Div {
+    let selector = format!("folder-pending-{workspace}");
+    let mark = crate::pending_tab::MARK.trim_end();
+    div()
+        .debug_selector(move || selector.clone())
+        .flex_none()
+        .text_size(look.small())
+        .text_color(rgb(look.theme.primary()))
+        .child(if count > 1 {
+            format!("{mark}{count}")
+        } else {
+            mark.to_owned()
+        })
 }
 
 /// A row among the selected folder's parts: its icon, label, and count,
