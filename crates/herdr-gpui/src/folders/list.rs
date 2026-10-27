@@ -239,7 +239,6 @@ impl HerdrWindow {
         let clicked = card.clone();
         let pressed = card.clone();
         let menu = card.clone();
-        let waiting = card.waiting();
         div()
             .id(SharedString::from(selector.clone()))
             .debug_selector(move || selector.clone())
@@ -314,12 +313,9 @@ impl HerdrWindow {
                 row.child(host_chip(look, host))
             })
             .when_some(card.dirty.filter(|dirty| dirty.files > 0), |row, dirty| {
-                row.child(
-                    bubble(look, look.status(AgentStatus::Blocked), dirty.files)
-                        .when(!waiting, |bubble| {
-                            bubble.bg(rgb(theme.ink(theme.palette[3])))
-                        }),
-                )
+                // Always the uncommitted hue: the agent's own mark beside it
+                // already says when it waits on you.
+                row.child(bubble(look, theme.ink(theme.palette[3]), dirty.files))
             })
             .when_some(card.agent.as_ref(), |row, agent| {
                 row.child(look.dot(agent.state.status()))
