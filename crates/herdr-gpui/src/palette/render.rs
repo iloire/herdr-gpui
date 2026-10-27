@@ -9,10 +9,10 @@ use gpui::{prelude::*, *};
 const PREVIEW_MIN_WIDTH: f32 = 840.;
 
 const HINTS: &str = "↑↓ / Tab / ⌃N ⌃P move · ⌃Tab filter · ↵ select · Esc close";
-/// Without a configured root the picker lists only folders opened before,
-/// so it says how to list every checkout too.
-const NO_PROJECT_ROOTS: &str = "Tip: to list every folder inside the one holding your \
-     checkouts, add project_roots = [\"~/code\"] under [palette] in the config.";
+/// Without a configured root the picker guesses where checkouts live, so it
+/// says how to name the place instead.
+const NO_PROJECT_ROOTS: &str = "Listing the folders beside the ones you use. To list \
+     another folder's instead, add project_roots = [\"~/code\"] under [palette] in the config.";
 const OPEN_PROJECT_HINTS: &str = "↑↓ move · ↵ open · Esc close";
 const GO_TO_HINTS: &str =
     "↑↓ / Tab / ⌃N ⌃P move · ⌃Tab filter · ⌥B/W/I/D/A status · ⌥P preview · ↵ select · Esc close";

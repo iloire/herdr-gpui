@@ -2287,9 +2287,12 @@ window at once, and `herdr-gpui ui panel NAME` shows a section.
   folder dialog for any folder on this computer. Below it, **Recent** lists the
   folders this app has seen open on the local Herdr and that are closed now,
   the last used first (up to 64, kept in `recent-folders.json` in the app's
-  state directory), then the folders inside `[palette] project_roots`.
+  state directory), then the folders inside `[palette] project_roots`. With
+  no roots set, it lists instead the folders beside the ones in use: those
+  inside the parents of the open and recent folders (up to four parents,
+  never the home folder itself), and a tip shows how to name roots instead.
   Choosing one focuses its workspace, or creates it, and Folders selects that
-  folder on its Home. With no roots set, a tip shows how to add one.
+  folder on its Home.
 
   A folder's **Home** puts where it stands on one page, in cards:
   uncommitted files and the agents working in it; its open **pull

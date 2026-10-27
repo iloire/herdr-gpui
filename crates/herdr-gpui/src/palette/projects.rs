@@ -110,6 +110,20 @@ pub(super) fn expand_root(root: &str) -> Result<PathBuf> {
 
 pub(super) fn collect(roots: &[String], cancelled: &AtomicBool) -> Collection {
     let home = crate::config::home().ok();
+    scan(
+        roots
+            .iter()
+            .map(|root| expand(root, |name| std::env::var_os(name), home.as_deref())),
+        cancelled,
+    )
+}
+
+/// Lists the folders inside each root; a root that could not be expanded
+/// is reported in its place.
+pub(super) fn scan(
+    roots: impl IntoIterator<Item = Result<PathBuf>>,
+    cancelled: &AtomicBool,
+) -> Collection {
     let mut collection = Collection::default();
     let mut seen = HashSet::new();
     let mut visits = 0;
@@ -118,7 +132,7 @@ pub(super) fn collect(roots: &[String], cancelled: &AtomicBool) -> Collection {
             break;
         }
         let result = (|| -> Result<()> {
-            let root = expand(root, |name| std::env::var_os(name), home.as_deref())?;
+            let root = root?;
             // Children are listed under the verbatim root and each brought
             // to plain form on its own: a short root can hold a child too
             // long for the plain form, which `validate` keeps verbatim.

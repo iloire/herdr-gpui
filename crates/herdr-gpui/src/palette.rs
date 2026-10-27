@@ -642,7 +642,7 @@ impl HerdrWindow {
                 match scope {
                     Scope::Everything => "Search workspaces, commands, agents, and projects...",
                     Scope::OpenProject if self.config.palette.project_roots.is_empty() => {
-                        "Search recent folders, or choose one..."
+                        "Search folders to add, or choose one..."
                     }
                     Scope::OpenProject => "Search folders to add, or name a new one...",
                 },

@@ -105,7 +105,11 @@ impl HerdrWindow {
         let cancelled = palette._scan.0.clone();
         let recent = recent_folders::RecentFolders::paths(cx);
         let load = cx.background_executor().spawn(async move {
-            let mut collection = projects::collect(&roots, &cancelled);
+            let mut collection = if roots.is_empty() {
+                recent_folders::nearby(&recent, &open, &cancelled)
+            } else {
+                projects::collect(&roots, &cancelled)
+            };
             collection.recent = recent_folders::closed(recent, &open);
             collection
         });

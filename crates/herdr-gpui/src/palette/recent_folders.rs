@@ -197,6 +197,45 @@ pub(super) fn choose_entry() -> Entry {
     )
 }
 
+/// Parent folders whose children `nearby` lists, the most used first.
+const MAX_NEARBY_ROOTS: usize = 4;
+
+/// With no configured roots, the folders beside the ones in use: those
+/// inside each remembered or open folder's parent, as if that parent were a
+/// configured root. The home folder and the filesystem root are never one,
+/// so a folder kept at the top of home does not list everything there; a
+/// parent that cannot be read is skipped rather than reported, since the
+/// user never named it. Blocking: callers run it off the UI thread.
+pub(super) fn nearby(
+    recent: &[PathBuf],
+    open: &[String],
+    cancelled: &std::sync::atomic::AtomicBool,
+) -> projects::Collection {
+    let home = crate::config::home()
+        .ok()
+        .and_then(|home| canonical::canonicalize(&home).ok());
+    let mut parents: Vec<PathBuf> = Vec::new();
+    for folder in open.iter().map(PathBuf::from).chain(recent.iter().cloned()) {
+        let Some(parent) = folder
+            .parent()
+            .and_then(|parent| canonical::canonicalize(parent).ok())
+        else {
+            continue;
+        };
+        if parent.parent().is_none() || Some(&parent) == home.as_ref() || parents.contains(&parent)
+        {
+            continue;
+        }
+        parents.push(parent);
+        if parents.len() == MAX_NEARBY_ROOTS {
+            break;
+        }
+    }
+    let mut collection = projects::scan(parents.into_iter().map(Ok), cancelled);
+    collection.errors.clear();
+    collection
+}
+
 /// The remembered folders that still exist and are not open now, as projects
 /// to open. Blocking: reads the disk, so callers run it off the UI thread.
 pub(super) fn closed(recent: Vec<PathBuf>, open: &[String]) -> Vec<projects::Project> {

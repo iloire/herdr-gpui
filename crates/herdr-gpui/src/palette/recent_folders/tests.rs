@@ -117,3 +117,26 @@ fn closed_lists_existing_folders_that_are_not_open_once_each() {
     assert_eq!(projects[0].label, "kept");
     assert_eq!(projects[0].path, root.join("kept"));
 }
+
+#[test]
+fn nearby_lists_the_siblings_of_used_folders_but_never_homes_children() {
+    let dir = tempfile::tempdir().unwrap();
+    let code = canonical::canonicalize(dir.path()).unwrap().join("code");
+    for name in ["used", "sibling", ".hidden"] {
+        std::fs::create_dir_all(code.join(name)).unwrap();
+    }
+    let open = [code.join("used").to_string_lossy().into_owned()];
+    let found = nearby(&[code.join("used")], &open, &Default::default());
+    let mut labels: Vec<_> = found.projects.iter().map(|p| p.label.as_str()).collect();
+    labels.sort_unstable();
+    assert_eq!(labels, ["sibling", "used"]);
+    assert!(found.errors.is_empty());
+
+    let home = crate::config::home().unwrap();
+    let at_home = nearby(
+        &[home.join("notes"), PathBuf::from("/")],
+        &[],
+        &Default::default(),
+    );
+    assert!(at_home.projects.is_empty());
+}
