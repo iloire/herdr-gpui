@@ -15,26 +15,27 @@ fn busy_new_shell_keeps_its_worktree_and_sends_exactly_one_prompt_when_ready() {
         "Agent started"
     );
     let calls = calls(dir.path());
-    assert_eq!(calls.len(), 8, "{calls:?}");
+    assert_eq!(calls.len(), 9, "{calls:?}");
     assert!(calls[1].starts_with("worktree create "));
-    assert_eq!(calls[2], calls[4]);
-    assert_eq!(calls[2], calls[6]);
-    assert!(calls[2].starts_with("agent start herdr-gpui-"));
-    assert_eq!(calls[3], "pane get p9");
-    assert_eq!(calls[5], "pane get p9");
-    assert!(calls[7].starts_with("agent prompt p9 "));
+    assert!(calls[2].starts_with("pane move p9 "));
+    assert_eq!(calls[3], calls[5]);
+    assert_eq!(calls[3], calls[7]);
+    assert!(calls[3].starts_with("agent start herdr-gpui-"));
+    assert_eq!(calls[4], "pane get w1:p9");
+    assert_eq!(calls[6], "pane get w1:p9");
+    assert!(calls[8].starts_with("agent prompt w1:p9 "));
     let store = Store::open(&site.database).unwrap();
     let run = store.runs().unwrap().remove(0);
     assert_eq!(run.state, RunState::Running);
-    assert_eq!(run.workspace.unwrap().id, "w9");
-    assert_eq!(store.sessions().unwrap()[0].pane_id, "p9");
+    assert_eq!(run.workspace.unwrap().id, "w1");
+    assert_eq!(store.sessions().unwrap()[0].pane_id, "w1:p9");
 }
 
 #[test]
 fn a_missing_or_replaced_terminal_cannot_receive_a_retried_launch() {
     for pane in [
-        serde_json::json!({"pane_id": "p9", "terminal_id": "replacement"}),
-        serde_json::json!({"pane_id": "p9"}),
+        serde_json::json!({"pane_id": "w1:p9", "terminal_id": "replacement"}),
+        serde_json::json!({"pane_id": "w1:p9"}),
         serde_json::json!({"pane_id": "other", "terminal_id": "term9"}),
     ] {
         let dir = tempfile::tempdir().unwrap();
@@ -59,10 +60,10 @@ fn a_missing_or_replaced_terminal_cannot_receive_a_retried_launch() {
             }
         ));
         let calls = calls(dir.path());
-        assert_eq!(calls.len(), 5, "{calls:?}");
-        assert!(calls[2].starts_with("agent start "));
-        assert_eq!(calls[3], "pane get p9");
-        assert_eq!(calls[4], "worktree remove --workspace w9 --force");
+        assert_eq!(calls.len(), 7, "{calls:?}");
+        assert!(calls[3].starts_with("agent start "));
+        assert_eq!(calls[4], "pane get w1:p9");
+        assert_eq!(&calls[5..], ["api snapshot", "pane close w1:p9"]);
         let store = Store::open(&site.database).unwrap();
         let run = store.runs().unwrap().remove(0);
         assert_eq!(run.state, RunState::Failed);

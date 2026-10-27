@@ -2,7 +2,7 @@ use super::*;
 
 /// A dispatched run whose session is reread from the database, with its
 /// workspace's recorded checkout set to `path`.
-fn run_pointing_at(site: &Site, path: Option<PathBuf>) -> String {
+pub(super) fn run_pointing_at(site: &Site, path: Option<PathBuf>) -> String {
     let mut store = Store::open(&site.database).unwrap();
     let mut run = store.runs().unwrap().remove(0);
     let session = store.sessions().unwrap().remove(0);
@@ -19,7 +19,7 @@ fn workspace_gone(dir: &Path) {
 }
 
 #[test]
-fn remove_goes_through_herdr_while_the_workspace_lives() {
+fn remove_closes_the_agents_tab_in_the_folder() {
     let dir = tempfile::tempdir().unwrap();
     let site = site(dir.path(), "");
     let cancelled = AtomicBool::new(false);
@@ -36,7 +36,11 @@ fn remove_goes_through_herdr_while_the_workspace_lives() {
     let calls = calls(dir.path());
     assert_eq!(
         &calls[calls.len() - 2..],
-        ["api snapshot", "worktree remove --workspace w9 --force"]
+        ["api snapshot", "pane close w1:p9"]
+    );
+    assert!(
+        !calls.iter().any(|call| call.starts_with("worktree remove")),
+        "the folder's own checkout is never removed: {calls:?}"
     );
     assert!(
         Store::open(&site.database)

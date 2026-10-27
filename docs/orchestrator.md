@@ -67,6 +67,17 @@ script call, and the UI reads the newest `Snapshot` from a coalescing mailbox.
 Live agent status comes from each connected host's Herdr snapshot, matched to
 runs by host, workspace, and pane; it is never written back to the database.
 
+Dispatch creates the worktree with `herdr worktree create`, which opens it as
+a workspace of its own, then moves that workspace's only pane into a new tab
+of the repository's parent workspace (`herdr pane move --new-tab`). Herdr
+closes the emptied workspace and gives the pane a new id; the terminal and
+checkout stay. The run records the parent workspace and the moved pane.
+Remove closes that pane, if the snapshot still shows it with its shell in the
+checkout, and removes the checkout with git. A run that still names a linked
+workspace whose checkout is the run's own (runs from before the move, or a
+dispatch whose move failed) goes through `herdr worktree remove`. Herdr
+reuses workspace and pane ids, so neither is acted on without that match.
+
 Dispatch can receive `agent_pane_busy` while the new worktree's shell runs its
 startup hooks. It retries only that structured rejection for up to ten seconds,
 checking the terminal identity returned by worktree creation before each retry.

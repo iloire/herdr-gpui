@@ -5,7 +5,8 @@
 //! - `fail`: a call whose arguments contain this text exits 1;
 //! - `snapshot-default`, `snapshot`: `api snapshot` prints the second when it
 //!   exists, else the first;
-//! - `pane`: what `pane get` prints instead of pane `p9` on `term9`;
+//! - `pane`: what `pane get` prints instead of pane `w1:p9` on `term9`, the
+//!   worktree's pane `p9` once `pane move` put it in a tab of `w1`;
 //! - `busy`: how many `agent start` calls are refused as a busy shell.
 
 use std::{env, fs, io::Write, path::PathBuf, process::exit};
@@ -37,8 +38,12 @@ fn main() {
             r#""worktree":{"path":"/tmp/wt/377-icons"}}}"#
         )
         .into(),
+        ["pane", "move"] => {
+            r#"{"result":{"move_result":{"pane":{"pane_id":"w1:p9","terminal_id":"term9"}}}}"#
+                .into()
+        }
         ["pane", "get"] => read("pane").unwrap_or_else(|| {
-            r#"{"result":{"pane":{"pane_id":"p9","terminal_id":"term9"}}}"#.into()
+            r#"{"result":{"pane":{"pane_id":"w1:p9","terminal_id":"term9"}}}"#.into()
         }),
         ["agent", "start"] => {
             let busy: u32 = read("busy")

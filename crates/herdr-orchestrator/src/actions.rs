@@ -11,8 +11,8 @@ use super::{
 use chrono::Utc;
 use herdr_client::{ConnectTarget, shell_quote};
 use herdr_remote::teleport::{
-    self, AgentKind, Envelope, FreshOrigin, Host, HostRepositories, HostSnapshot, SnapshotResult,
-    WorkspaceCreated, WorktreeCreated,
+    self, AgentKind, CreatedPane, Envelope, FreshOrigin, Host, HostRepositories, HostSnapshot,
+    SnapshotResult, WorkspaceCreated, WorktreeCreated,
 };
 use std::{path::PathBuf, sync::atomic::AtomicBool};
 
@@ -207,26 +207,52 @@ fn herdr(
         .map_err(script(operation))
 }
 
-/// A run's worktree, removed on the host its session lives on. Herdr's
-/// `worktree remove` addresses the workspace the worktree was made for, and
-/// Herdr forgets a workspace whose last pane has exited, so the workspace id
-/// recorded at dispatch goes stale once the run's pane is gone. A workspace
-/// the snapshot still lists goes through Herdr, which also closes its panes;
-/// a gone one has its recorded checkout removed with git, which only the
-/// workspace could have asked Herdr to do.
+/// A run's worktree, removed on the host its session lives on.
 fn remove_worktree(
     site: &Site,
     session: &HerdrSession,
     workspace: &Workspace,
     cancelled: &AtomicBool,
 ) -> Result<()> {
+    remove_checkout(
+        &host_of(site, session)?,
+        &session.pane_id,
+        workspace,
+        cancelled,
+    )
+}
+
+/// Removes a run's checkout and closes the tab its agent ran in. Dispatch
+/// moves the agent's pane into a tab of the repository's folder, which
+/// closes the worktree's own workspace, so the recorded workspace is the
+/// folder's. Runs from before that, or a dispatch that failed before the
+/// move, still name the worktree's workspace: one the snapshot lists as that
+/// linked checkout goes through Herdr's `worktree remove`, which also closes
+/// its panes. Otherwise the pane is closed while it still sits in the
+/// checkout, and the checkout is removed with git. Herdr reuses ids, so
+/// neither is trusted without matching the recorded checkout.
+fn remove_checkout(
+    host: &Host,
+    pane_id: &str,
+    workspace: &Workspace,
+    cancelled: &AtomicBool,
+) -> Result<()> {
     const READING: &str = "Reading the workspaces";
     const REMOVING: &str = "Removing the worktree";
-    let host = host_of(site, session)?;
-    let alive = host_snapshot(&host, READING, cancelled)?;
-    if alive.workspace(&workspace.id).is_some() {
+    let alive = host_snapshot(host, READING, cancelled)?;
+    let path = workspace.path.as_deref().map(|path| path.to_string_lossy());
+    let own_workspace = alive
+        .workspace(&workspace.id)
+        .and_then(|found| found.worktree.as_ref())
+        .is_some_and(|tree| {
+            tree.is_linked_worktree
+                && path
+                    .as_deref()
+                    .is_none_or(|path| path == tree.checkout_path)
+        });
+    if own_workspace {
         herdr(
-            &host,
+            host,
             &[
                 "worktree",
                 "remove",
@@ -239,11 +265,22 @@ fn remove_worktree(
         )?;
         return Ok(());
     }
-    // Without the workspace only its checkout could remain; a run without
-    // a recorded one has nothing on the host to remove.
+    // A run without a recorded checkout has nothing on the host to remove.
     let Some(path) = workspace.path.as_deref() else {
         return Ok(());
     };
+    let root = path.to_string_lossy();
+    let in_checkout = |cwd: &Option<String>| {
+        cwd.as_deref()
+            .and_then(|cwd| cwd.strip_prefix(root.as_ref()))
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with(['/', '\\']))
+    };
+    if alive
+        .pane(pane_id)
+        .is_some_and(|pane| in_checkout(&pane.cwd) || in_checkout(&pane.foreground_cwd))
+    {
+        herdr(host, &["pane", "close", pane_id], REMOVING, cancelled)?;
+    }
     if host.is_local() {
         if !path.is_dir() {
             return Ok(());
@@ -325,6 +362,7 @@ fn dispatch(site: &Site, request: &DispatchRequest, cancelled: &AtomicBool) -> R
         owner: Owner::HerdrGpui,
     };
     store.save_run(&run, None)?;
+    // The host and pane of the checkout made so far, to undo on failure.
     let mut created: Option<(Host, String)> = None;
     let outcome = destination(site, request, cancelled).and_then(|destination| {
         let outcome = launch(
@@ -347,13 +385,8 @@ fn dispatch(site: &Site, request: &DispatchRequest, cancelled: &AtomicBool) -> R
         // A checkout that would not go keeps its session, which names the
         // host, so Remove can try again; one that went is no longer the run's.
         let mut kept = None;
-        if let Some((host, workspace)) = created {
-            let removed = herdr(
-                &host,
-                &["worktree", "remove", "--workspace", &workspace, "--force"],
-                "Removing the worktree",
-                &AtomicBool::new(false),
-            );
+        if let (Some((host, pane)), Some(workspace)) = (created, &run.workspace) {
+            let removed = remove_checkout(&host, &pane, workspace, &AtomicBool::new(false));
             if removed.is_ok() {
                 run.workspace = None;
             } else {
@@ -512,7 +545,7 @@ fn launch(
     name: &str,
     run: &mut Run,
     store: &mut Store,
-    created_workspace: &mut Option<(Host, String)>,
+    created: &mut Option<(Host, String)>,
     cancelled: &AtomicBool,
 ) -> Result<()> {
     let host = &destination.host;
@@ -532,29 +565,39 @@ fn launch(
         "Creating the worktree",
         cancelled,
     )?;
-    let created = serde_json::from_slice::<Envelope<WorktreeCreated>>(&output)
+    let worktree = serde_json::from_slice::<Envelope<WorktreeCreated>>(&output)
         .map_err(|source| Error::OutputJson {
             operation: "Creating the worktree",
             source,
         })?
         .result;
-    *created_workspace = Some((host.clone(), created.workspace.workspace_id.clone()));
+    *created = Some((host.clone(), worktree.root_pane.pane_id.clone()));
     let (ssh, session) = place(&destination.target);
     run.workspace = Some(Workspace {
         backend: Backend::Herdr,
-        id: created.workspace.workspace_id.clone(),
+        id: worktree.workspace.workspace_id,
         host: ssh.clone(),
-        path: Some(created.worktree.path.clone().into()),
+        path: Some(worktree.worktree.path.into()),
         branch: request.branch.clone(),
     });
+    let pane = into_folder(
+        host,
+        &worktree.root_pane.pane_id,
+        &destination.workspace_id,
+        cancelled,
+    )?;
+    *created = Some((host.clone(), pane.pane_id.clone()));
+    if let Some(workspace) = &mut run.workspace {
+        workspace.id.clone_from(&destination.workspace_id);
+    }
     run.state = RunState::Starting;
     run.updated_at = Utc::now();
     let herdr_session = HerdrSession {
         run_id: run.id.clone(),
         host: ssh,
         session,
-        workspace_id: created.workspace.workspace_id,
-        pane_id: created.root_pane.pane_id,
+        workspace_id: destination.workspace_id.clone(),
+        pane_id: pane.pane_id,
         agent_name: name.to_owned(),
         updated_at: run.updated_at,
     };
@@ -578,7 +621,9 @@ fn launch(
         host,
         &start,
         &herdr_session.pane_id,
-        created.root_pane.terminal_id.as_deref(),
+        pane.terminal_id
+            .as_deref()
+            .or(worktree.root_pane.terminal_id.as_deref()),
         cancelled,
     )?;
     // The pane is the target: a name could match an agent started elsewhere.
@@ -592,4 +637,48 @@ fn launch(
     run.updated_at = Utc::now();
     store.update_run(run, Some(&herdr_session))?;
     Ok(())
+}
+
+/// Moves the new worktree's pane into a new tab of the repository's folder,
+/// so the agent works beside the folder's other tabs rather than in a folder
+/// of its own. Herdr closes the worktree's workspace once its only pane
+/// leaves; the checkout stays. The pane gets a new id and keeps its terminal.
+fn into_folder(
+    host: &Host,
+    pane_id: &str,
+    workspace_id: &str,
+    cancelled: &AtomicBool,
+) -> Result<CreatedPane> {
+    const MOVING: &str = "Opening the agent's tab";
+    let output = herdr(
+        host,
+        &[
+            "pane",
+            "move",
+            pane_id,
+            "--new-tab",
+            "--workspace",
+            workspace_id,
+            "--no-focus",
+        ],
+        MOVING,
+        cancelled,
+    )?;
+    serde_json::from_slice::<Envelope<PaneMoved>>(&output)
+        .map(|envelope| envelope.result.move_result.pane)
+        .map_err(|source| Error::OutputJson {
+            operation: MOVING,
+            source,
+        })
+}
+
+/// `pane_move`, as `pane move` prints it.
+#[derive(serde::Deserialize)]
+struct PaneMoved {
+    move_result: MoveResult,
+}
+
+#[derive(serde::Deserialize)]
+struct MoveResult {
+    pane: CreatedPane,
 }

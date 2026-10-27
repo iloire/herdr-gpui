@@ -33,8 +33,8 @@ pub use {
     launch::AgentKind,
     marks::{Mark, Marks},
     snapshot::{
-        Envelope, HostSnapshot, PaneInfoResult, ProcessInfo, ProcessInfoResult, SnapshotResult,
-        WorkspaceCreated, WorktreeCreated,
+        CreatedPane, Envelope, HostSnapshot, PaneInfoResult, ProcessInfo, ProcessInfoResult,
+        SnapshotResult, WorkspaceCreated, WorktreeCreated,
     },
 };
 #[cfg(any(test, feature = "test-support"))]

@@ -9,6 +9,7 @@ use std::{
 };
 
 mod agent_name;
+mod folder_tab;
 mod parent;
 mod remove;
 mod startup;
@@ -39,15 +40,18 @@ fn fake_herdr() -> &'static Path {
 /// A home whose `herdr` (see `tests/support/fake_herdr.rs`) logs each call
 /// and answers as Herdr would. A call whose arguments contain `fail` exits 1.
 /// Its snapshot is `$HOME/snapshot` when written, else one where `w1` is the
-/// repository's parent workspace and `w9` the linked worktree a dispatch
-/// creates.
+/// repository's parent workspace, `w9` another linked worktree, and `w1:p9`
+/// the agent's tab a dispatch moved into `w1`.
 fn fake_home(dir: &Path, fail: &str) -> Host {
     let home = dir.join("home");
     let bin = home.join(".local/bin");
     std::fs::create_dir_all(&bin).unwrap();
     std::fs::write(
         home.join("snapshot-default"),
-        snapshot(&[("w1", false), ("w9", true)]),
+        snapshot_with(
+            &[("w1", false), ("w9", true)],
+            &[agent_pane("/tmp/wt/377-icons")],
+        ),
     )
     .unwrap();
     std::fs::write(home.join("fail"), fail).unwrap();
@@ -65,6 +69,16 @@ fn fake_home(dir: &Path, fail: &str) -> Host {
 /// `herdr api snapshot` output with each `(workspace, linked)` a checkout of
 /// one repository.
 fn snapshot(workspaces: &[(&str, bool)]) -> String {
+    snapshot_with(workspaces, &[])
+}
+
+/// The dispatched agent's pane `w1:p9`, its shell in `cwd`.
+fn agent_pane(cwd: &str) -> serde_json::Value {
+    serde_json::json!({"pane_id": "w1:p9", "tab_id": "w1:t2", "cwd": cwd})
+}
+
+/// [`snapshot`] that also lists `panes`.
+fn snapshot_with(workspaces: &[(&str, bool)], panes: &[serde_json::Value]) -> String {
     let workspaces: Vec<_> = workspaces
         .iter()
         .map(|(id, linked)| {
@@ -82,7 +96,7 @@ fn snapshot(workspaces: &[(&str, bool)]) -> String {
         .collect();
     serde_json::json!({
         "id": "cli:api:snapshot",
-        "result": {"snapshot": {"workspaces": workspaces, "tabs": [], "panes": []}},
+        "result": {"snapshot": {"workspaces": workspaces, "tabs": [], "panes": panes}},
     })
     .to_string()
 }
@@ -149,7 +163,7 @@ fn calls(dir: &Path) -> Vec<String> {
 }
 
 #[test]
-fn dispatch_creates_the_worktree_starts_the_agent_and_records_the_run() {
+fn dispatch_creates_the_worktree_starts_the_agent_in_a_folder_tab_and_records_the_run() {
     let dir = tempfile::tempdir().unwrap();
     let site = site(dir.path(), "");
     let done = perform(
@@ -163,18 +177,19 @@ fn dispatch_creates_the_worktree_starts_the_agent_and_records_the_run() {
     assert_eq!(calls[0], "api snapshot");
     assert!(calls[1].starts_with("worktree create --workspace w1 --branch 377-icons --base "));
     assert!(calls[1].ends_with(" --no-focus"));
-    let name = calls[2].split(' ').nth(2).unwrap();
+    assert_eq!(calls[2], "pane move p9 --new-tab --workspace w1 --no-focus");
+    let name = calls[3].split(' ').nth(2).unwrap();
     assert!(
         name.starts_with("herdr-gpui-") && name.len() == 32,
         "{name}"
     );
     assert_eq!(
-        calls[2],
-        format!("agent start {name} --kind claude --pane p9 --timeout 90000")
+        calls[3],
+        format!("agent start {name} --kind claude --pane w1:p9 --timeout 90000")
     );
     assert_eq!(
-        calls[3],
-        "agent prompt p9 Fix the icons; don't break 'quotes'."
+        calls[4],
+        "agent prompt w1:p9 Fix the icons; don't break 'quotes'."
     );
 
     let store = Store::open(&site.database).unwrap();
@@ -186,18 +201,22 @@ fn dispatch_creates_the_worktree_starts_the_agent_and_records_the_run() {
     let workspace = run.workspace.unwrap();
     assert_eq!(
         (workspace.id.as_str(), workspace.branch.as_str()),
-        ("w9", "377-icons")
+        ("w1", "377-icons")
     );
     let session = store.sessions().unwrap().remove(0);
     assert_eq!(
-        (session.pane_id.as_str(), session.agent_name.as_str()),
-        ("p9", name)
+        (
+            session.workspace_id.as_str(),
+            session.pane_id.as_str(),
+            session.agent_name.as_str()
+        ),
+        ("w1", "w1:p9", name)
     );
     assert_eq!(session.host, None);
 }
 
 #[test]
-fn a_failed_start_removes_the_worktree_and_records_why() {
+fn a_failed_start_closes_the_tab_removes_the_worktree_and_records_why() {
     let dir = tempfile::tempdir().unwrap();
     let site = site(dir.path(), "agent start");
     let error = perform(
@@ -213,9 +232,10 @@ fn a_failed_start_removes_the_worktree_and_records_why() {
             ..
         }
     ));
+    let calls = calls(dir.path());
     assert_eq!(
-        calls(dir.path()).last().unwrap(),
-        "worktree remove --workspace w9 --force"
+        &calls[calls.len() - 2..],
+        ["api snapshot", "pane close w1:p9"]
     );
     let run = Store::open(&site.database)
         .unwrap()
@@ -223,6 +243,7 @@ fn a_failed_start_removes_the_worktree_and_records_why() {
         .unwrap()
         .remove(0);
     assert_eq!(run.state, RunState::Failed);
+    assert!(run.workspace.is_none());
     assert!(run.message.unwrap().contains("Starting the agent"));
 }
 
@@ -240,7 +261,7 @@ fn stop_and_remove_act_on_own_runs_only() {
     let calls_now = calls(dir.path());
     assert_eq!(
         &calls_now[calls_now.len() - 2..],
-        ["agent send-keys p9 esc", "agent send-keys p9 ctrl+c"]
+        ["agent send-keys w1:p9 esc", "agent send-keys w1:p9 ctrl+c"]
     );
     let run = Store::open(&site.database)
         .unwrap()
@@ -250,10 +271,7 @@ fn stop_and_remove_act_on_own_runs_only() {
     assert_eq!(run.state, RunState::Cancelled);
 
     perform(&site, &Action::Remove { run: id.clone() }, &cancelled).unwrap();
-    assert_eq!(
-        calls(dir.path()).last().unwrap(),
-        "worktree remove --workspace w9 --force"
-    );
+    assert_eq!(calls(dir.path()).last().unwrap(), "pane close w1:p9");
     assert!(
         Store::open(&site.database)
             .unwrap()
@@ -307,7 +325,7 @@ fn a_chosen_model_reaches_the_agent_and_the_run() {
         &AtomicBool::new(false),
     )
     .unwrap();
-    let start = calls(dir.path())[2].clone();
+    let start = calls(dir.path())[3].clone();
     assert!(
         start.ends_with(" --timeout 90000 -- --model claude-opus-5-5"),
         "{start}"
