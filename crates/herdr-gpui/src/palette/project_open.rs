@@ -1,9 +1,9 @@
 //! Project opening retains the local connection and palette identities through
 //! background validation and the correlated daemon response.
 
-use super::{Error, LocalTarget, ProjectOperation, project_create, projects};
+use super::{Error, LocalTarget, ProjectOperation, project_create, projects, recent_folders};
 use crate::{HerdrWindow, NavigationTarget, Result};
-use gpui::{Context, Window};
+use gpui::{App, Context, PathPromptOptions, Window};
 use herdr_client::{Method, protocol::ClientShellSnapshot};
 use serde_json::{Value, json};
 use std::{path::PathBuf, sync::Arc};
@@ -43,7 +43,56 @@ impl HerdrWindow {
         Ok(())
     }
 
+    /// The system's folder dialog. The chosen folder opens as Open Project
+    /// opens one, focusing its workspace if one is already there; a refusal,
+    /// with no palette left to show it in, reads as a local error.
+    pub(super) fn choose_project_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let paths = cx.prompt_for_paths(PathPromptOptions {
+            files: false,
+            directories: true,
+            multiple: false,
+            prompt: Some("Add".into()),
+        });
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(paths))) = paths.await else {
+                return;
+            };
+            let Some(path) = paths.into_iter().next() else {
+                return;
+            };
+            let resolved = cx
+                .background_executor()
+                .spawn(async move {
+                    super::canonical::canonicalize(&path)
+                        .map_err(|error| crate::Error::from(error).at_path(&path))
+                })
+                .await;
+            let _ = this.update_in(cx, |this, window, cx| {
+                if let Err(error) = resolved.and_then(|path| this.open_project_at(path, window, cx))
+                {
+                    this.local_error = Some(error.to_string());
+                    cx.notify();
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Whether there are projects to look for: configured roots to scan,
+    /// or folders opened before.
+    pub(super) fn has_project_sources(&self, cx: &App) -> bool {
+        !self.config.palette.project_roots.is_empty() || recent_folders::RecentFolders::any(cx)
+    }
+
     pub(super) fn load_palette_projects(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // Open folders are not offered again; read before the palette is borrowed.
+        let open: Vec<String> = self
+            .local_snapshot()
+            .map(|snapshot| projects::workspace_roots(snapshot))
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(_, root)| root)
+            .collect();
         let Some(palette) = &mut self.menu.palette else {
             return;
         };
@@ -54,9 +103,12 @@ impl HerdrWindow {
         let config = self.config.palette.clone();
         let roots = config.project_roots.clone();
         let cancelled = palette._scan.0.clone();
-        let load = cx
-            .background_executor()
-            .spawn(async move { projects::collect(&roots, &cancelled) });
+        let recent = recent_folders::RecentFolders::paths(cx);
+        let load = cx.background_executor().spawn(async move {
+            let mut collection = projects::collect(&roots, &cancelled);
+            collection.recent = recent_folders::closed(recent, &open);
+            collection
+        });
         palette.project_task = Some(cx.spawn_in(window, async move |this, cx| {
             let collection = load.await;
             let _ = this.update_in(cx, |this, _, cx| {

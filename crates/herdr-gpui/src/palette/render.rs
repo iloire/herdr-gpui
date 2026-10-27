@@ -9,11 +9,10 @@ use gpui::{prelude::*, *};
 const PREVIEW_MIN_WIDTH: f32 = 840.;
 
 const HINTS: &str = "↑↓ / Tab / ⌃N ⌃P move · ⌃Tab filter · ↵ select · Esc close";
-/// Projects are the folders inside the configured roots, so without one
-/// the picker has nothing to list.
-const NO_PROJECT_ROOTS: &str = "No project folders yet. List the folders that hold your \
-     checkouts under [palette] project_roots in the config, such as \
-     project_roots = [\"~/code\"], and each folder inside them shows here.";
+/// Without a configured root the picker lists only folders opened before,
+/// so it says how to list every checkout too.
+const NO_PROJECT_ROOTS: &str = "Tip: to list every folder inside the one holding your \
+     checkouts, add project_roots = [\"~/code\"] under [palette] in the config.";
 const OPEN_PROJECT_HINTS: &str = "↑↓ move · ↵ open · Esc close";
 const GO_TO_HINTS: &str =
     "↑↓ / Tab / ⌃N ⌃P move · ⌃Tab filter · ⌥B/W/I/D/A status · ⌥P preview · ↵ select · Esc close";
@@ -61,7 +60,7 @@ impl HerdrWindow {
                                 .px_2()
                                 .py_1()
                                 .text_color(rgb(theme.foreground))
-                                .child("Open project"),
+                                .child("Add a folder"),
                         )
                     })
                     .when(palette.scope == Scope::Everything, |row| {
@@ -430,14 +429,7 @@ impl HerdrWindow {
                                 .flex_1()
                                 .p(px(16.))
                                 .text_color(rgb(theme.muted))
-                                .when(!no_roots, |empty| {
-                                    empty.child("No matching results. Try a shorter search.")
-                                })
-                                .when(no_roots, |empty| {
-                                    empty
-                                        .debug_selector(|| "palette-no-project-roots".into())
-                                        .child(NO_PROJECT_ROOTS)
-                                }),
+                                .child("No matching results. Try a shorter search."),
                         )
                     })
                     .when(!palette.filtered.is_empty(), |body| {
@@ -463,6 +455,17 @@ impl HerdrWindow {
                         body.child(self.render_palette_preview(palette))
                     }),
             )
+            .when(no_roots, |panel| {
+                panel.child(
+                    div()
+                        .debug_selector(|| "palette-no-project-roots".into())
+                        .flex_none()
+                        .px(px(16.))
+                        .py(px(8.))
+                        .text_color(rgb(theme.muted))
+                        .child(NO_PROJECT_ROOTS),
+                )
+            })
             .child(
                 div()
                     .debug_selector(|| "palette-status".into())

@@ -15,6 +15,8 @@ pub enum Error {
     HostUnavailable,
     #[error("Invalid saved palette history")]
     InvalidFrecency,
+    #[error("Invalid saved recent folders")]
+    InvalidRecentFolders,
     #[error("The local connection changed. Reopen the palette.")]
     LocalChanged,
     #[error("No captured daemon session. Reopen the palette.")]

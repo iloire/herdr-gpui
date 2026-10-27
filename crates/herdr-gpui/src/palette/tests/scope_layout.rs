@@ -62,7 +62,7 @@ fn the_project_picker_shows_projects_alone(cx: &mut TestAppContext) {
         assert_eq!(palette.scope(), Scope::OpenProject);
         assert_eq!(
             palette.search.read(cx).placeholder(),
-            "Search projects to open..."
+            "Search recent folders, or choose one..."
         );
     });
 

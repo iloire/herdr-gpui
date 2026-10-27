@@ -411,6 +411,12 @@ pub(crate) fn run() -> std::process::ExitCode {
     } else {
         crate::palette::Frecency::default()
     };
+    // Nor with which folders the user has opened.
+    let recent_folders = if mode == LaunchMode::Normal {
+        crate::palette::RecentFolders::load()
+    } else {
+        crate::palette::RecentFolders::default()
+    };
     // Nor with where the user's worktrees went.
     let dispatch_history = if mode == LaunchMode::Normal {
         crate::dispatch::History::load()
@@ -437,6 +443,7 @@ pub(crate) fn run() -> std::process::ExitCode {
             worktree_notes.install(cx);
             overview_marks.install(cx);
             palette_frecency.install(cx);
+            recent_folders.install(cx);
             dispatch_history.install(cx);
             fan_out_journal.install(cx);
             agent_skill.install_global(cx);

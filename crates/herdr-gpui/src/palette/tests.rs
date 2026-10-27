@@ -11,6 +11,7 @@ mod go_to_search;
 mod notes;
 mod plugin_selection;
 mod preview_layout;
+mod recent_folders;
 mod resume;
 mod scope_layout;
 
@@ -107,6 +108,7 @@ fn command_badges_mark_daemon_commands_and_go_to_badges_mark_agent_status(cx: &m
                     } => "waiting",
                     Action::Go { .. } => "Workspace",
                     Action::Project(_) => "Project",
+                    Action::ChooseFolder => "Browse",
                     Action::NewProject(_) => "Project",
                     Action::Note { .. } => "Note",
                 };

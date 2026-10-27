@@ -264,7 +264,9 @@ impl HerdrWindow {
 
     /// This machine's own daemon's state, when it is connected and the
     /// user's own, whichever host the window shows.
-    pub(crate) fn local_snapshot(&self) -> Option<&herdr_client::protocol::ClientShellSnapshot> {
+    pub(crate) fn local_snapshot(
+        &self,
+    ) -> Option<&Arc<herdr_client::protocol::ClientShellSnapshot>> {
         let endpoint = self.endpoints.first()?;
         let live = if self.selected_endpoint == 0 {
             &self.live
@@ -274,7 +276,7 @@ impl HerdrWindow {
         if !endpoint.enabled || !live.local_daemon_peer || !live.status.is_connected() {
             return None;
         }
-        live.snapshot.as_deref()
+        live.snapshot.as_ref()
     }
 
     /// Runs every tick: starts a pass when one is due, or at once when what

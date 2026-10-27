@@ -2282,11 +2282,14 @@ window at once, and `herdr-gpui ui panel NAME` shows a section.
   manager, or copy its paths. Drag
   the edge of the list, the tree, or the Changes list to resize it; a
   double-click goes back to the default width. The **+** at the right of
-  the list's header (**Open project**) opens a project picker: the folders
-  inside `[palette] project_roots`, the ones you opened most recently first,
-  without the palette's other filters. Choosing one focuses its workspace, or
-  creates it, and Folders selects that folder on its Home. With no roots set
-  the picker says so and shows how to add one.
+  the list's header (**Add a folder**) opens a folder picker without the
+  palette's other filters. **Choose a folder…** at the top opens the system's
+  folder dialog for any folder on this computer. Below it, **Recent** lists the
+  folders this app has seen open on the local Herdr and that are closed now,
+  the last used first (up to 64, kept in `recent-folders.json` in the app's
+  state directory), then the folders inside `[palette] project_roots`.
+  Choosing one focuses its workspace, or creates it, and Folders selects that
+  folder on its Home. With no roots set, a tip shows how to add one.
 
   A folder's **Home** puts where it stands on one page, in cards:
   uncommitted files and the agents working in it; its open **pull

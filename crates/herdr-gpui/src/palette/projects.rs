@@ -25,6 +25,8 @@ pub(super) struct Project {
 
 #[derive(Default)]
 pub(super) struct Collection {
+    /// Folders opened before and closed since, newest first.
+    pub(super) recent: Vec<Project>,
     pub(super) projects: Vec<Project>,
     pub(super) errors: Vec<crate::Error>,
 }

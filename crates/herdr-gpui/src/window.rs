@@ -722,6 +722,7 @@ impl HerdrWindow {
         }
         self.announce_version_mismatch(window, cx);
         self.resize();
+        self.remember_open_folders(cx);
         self.refresh_palette(window, cx);
         self.report_focus();
         self.sync_window_title(window);

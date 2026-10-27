@@ -32,6 +32,8 @@ mod project_create;
 mod project_open;
 mod projects;
 pub(crate) use projects::launch_root;
+mod recent_folders;
+pub(crate) use recent_folders::RecentFolders;
 mod render;
 mod resume;
 pub(crate) use resume::Resume;
@@ -105,7 +107,9 @@ impl Filter {
                 == match action {
                     Action::Native(_) | Action::Configured(..) => Self::Commands,
                     Action::Go { .. } => Self::Navigation,
-                    Action::Project(_) | Action::NewProject(_) => Self::Projects,
+                    Action::ChooseFolder | Action::Project(_) | Action::NewProject(_) => {
+                        Self::Projects
+                    }
                     Action::Note { .. } => Self::Notes,
                 }
     }
@@ -133,6 +137,8 @@ enum Action {
     },
     Configured(String, ClientShellCommandAction),
     Project(projects::Project),
+    /// Any folder, picked in the system's folder dialog.
+    ChooseFolder,
     /// A new project directory to create or clone, named by the query.
     NewProject(project_create::NewProject),
     /// A workspace whose checkout has a note, gone to as Go To goes to it.
@@ -208,6 +214,7 @@ enum Identity {
     Go(String, OwnedNavigationTarget),
     Configured(String),
     Project(std::path::PathBuf),
+    ChooseFolder,
     NewProject(std::path::PathBuf),
     Note(String, String),
 }
@@ -221,6 +228,7 @@ impl Action {
             } => Identity::Go(endpoint.clone(), target.clone()),
             Self::Configured(id, _) => Identity::Configured(id.clone()),
             Self::Project(project) => Identity::Project(project.path.clone()),
+            Self::ChooseFolder => Identity::ChooseFolder,
             Self::NewProject(project) => Identity::NewProject(project.path.clone()),
             Self::Note {
                 endpoint,
@@ -472,7 +480,14 @@ fn rank_rows(
 ) -> Vec<search::Hit> {
     let mut hits = status.rank(entries, candidates, query, matcher);
     if filter == Filter::Projects && query.is_empty() {
-        hits.sort_by_key(|hit| std::cmp::Reverse(entries[hit.index].boost));
+        // Choosing a folder stays on top, where the eye lands first.
+        hits.sort_by_key(|hit| {
+            let entry = &entries[hit.index];
+            (
+                !matches!(entry.action, Action::ChooseFolder),
+                std::cmp::Reverse(entry.boost),
+            )
+        });
     }
     hits
 }
@@ -627,9 +642,9 @@ impl HerdrWindow {
                 match scope {
                     Scope::Everything => "Search workspaces, commands, agents, and projects...",
                     Scope::OpenProject if self.config.palette.project_roots.is_empty() => {
-                        "Search projects to open..."
+                        "Search recent folders, or choose one..."
                     }
-                    Scope::OpenProject => "Search projects to open, or name a new one...",
+                    Scope::OpenProject => "Search folders to add, or name a new one...",
                 },
                 cx,
             );
@@ -654,7 +669,7 @@ impl HerdrWindow {
             query: String::new(),
             error: None,
             projects: projects::Collection::default(),
-            loading_projects: !self.config.palette.project_roots.is_empty(),
+            loading_projects: self.has_project_sources(cx),
             project_task: None,
             _scan: projects::Cancellation::default(),
             sources: Vec::new(),
@@ -795,11 +810,29 @@ impl HerdrWindow {
                     }),
             );
         }
-        entries.extend(palette.projects.projects.iter().map(|project| {
+        entries.push(recent_folders::choose_entry());
+        let recent = palette
+            .projects
+            .recent
+            .iter()
+            .map(|project| (project, "Recent"));
+        let discovered = palette
+            .projects
+            .projects
+            .iter()
+            .filter(|project| {
+                !palette
+                    .projects
+                    .recent
+                    .iter()
+                    .any(|r| r.path == project.path)
+            })
+            .map(|project| (project, "Project"));
+        entries.extend(recent.chain(discovered).map(|(project, badge)| {
             let mut entry = Entry::new(
                 project.label.clone(),
                 format!("Local  {}", project.path.display()),
-                "Project",
+                badge,
                 Action::Project(project.clone()),
                 None,
             );
@@ -837,7 +870,7 @@ impl HerdrWindow {
                 palette._scan = projects::Cancellation::default();
                 palette.configuration = self.config.palette.clone();
                 palette.projects = projects::Collection::default();
-                palette.loading_projects = !self.config.palette.project_roots.is_empty();
+                palette.loading_projects = self.has_project_sources(cx);
                 self.prepare_palette_entries(&mut palette, crate::worktree_notes::Notes::of(cx));
                 self.menu.palette = Some(palette);
                 self.rank_palette(Selection::Keep, cx);

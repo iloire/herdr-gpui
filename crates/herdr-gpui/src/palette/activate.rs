@@ -71,6 +71,11 @@ impl HerdrWindow {
             self.activate_project(project, window, cx);
             return;
         }
+        if let Action::ChooseFolder = action {
+            self.dismiss_menu(window, cx);
+            self.choose_project_folder(window, cx);
+            return;
+        }
         if let Action::NewProject(project) = action {
             self.create_project(project, window, cx);
             return;
@@ -127,6 +132,7 @@ impl HerdrWindow {
                 | Action::Go { .. }
                 | Action::Project(_)
                 | Action::NewProject(_)
+                | Action::ChooseFolder
                 | Action::Note { .. } => unreachable!(),
             }
         })();
