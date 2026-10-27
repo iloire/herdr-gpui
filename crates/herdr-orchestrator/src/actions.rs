@@ -16,6 +16,7 @@ use herdr_remote::teleport::{
 };
 use std::{path::PathBuf, sync::atomic::AtomicBool};
 
+mod reuse;
 mod start;
 
 /// How long `herdr agent start` may wait for the agent to be ready.
@@ -549,7 +550,8 @@ fn launch(
     cancelled: &AtomicBool,
 ) -> Result<()> {
     let host = &destination.host;
-    let output = herdr(
+    let (ssh, session) = place(&destination.target);
+    let creating = herdr(
         host,
         &[
             "worktree",
@@ -564,29 +566,50 @@ fn launch(
         ],
         "Creating the worktree",
         cancelled,
-    )?;
-    let worktree = serde_json::from_slice::<Envelope<WorktreeCreated>>(&output)
-        .map_err(|source| Error::OutputJson {
-            operation: "Creating the worktree",
-            source,
-        })?
-        .result;
-    *created = Some((host.clone(), worktree.root_pane.pane_id.clone()));
-    let (ssh, session) = place(&destination.target);
-    run.workspace = Some(Workspace {
-        backend: Backend::Herdr,
-        id: worktree.workspace.workspace_id,
-        host: ssh.clone(),
-        path: Some(worktree.worktree.path.into()),
-        branch: request.branch.clone(),
-    });
-    let pane = into_folder(
-        host,
-        &worktree.root_pane.pane_id,
-        &destination.workspace_id,
-        cancelled,
-    )?;
-    *created = Some((host.clone(), pane.pane_id.clone()));
+    );
+    let pane = match creating {
+        Ok(output) => {
+            let worktree = serde_json::from_slice::<Envelope<WorktreeCreated>>(&output)
+                .map_err(|source| Error::OutputJson {
+                    operation: "Creating the worktree",
+                    source,
+                })?
+                .result;
+            *created = Some((host.clone(), worktree.root_pane.pane_id.clone()));
+            run.workspace = Some(Workspace {
+                backend: Backend::Herdr,
+                id: worktree.workspace.workspace_id,
+                host: ssh.clone(),
+                path: Some(worktree.worktree.path.into()),
+                branch: request.branch.clone(),
+            });
+            let mut pane = into_folder(
+                host,
+                &worktree.root_pane.pane_id,
+                &destination.workspace_id,
+                cancelled,
+            )?;
+            *created = Some((host.clone(), pane.pane_id.clone()));
+            pane.terminal_id = pane.terminal_id.or(worktree.root_pane.terminal_id);
+            pane
+        }
+        Err(error) => {
+            let Ok(Some(path)) =
+                reuse::checkout(host, &destination.workspace_id, &request.branch, cancelled)
+            else {
+                return Err(error);
+            };
+            let pane = reuse::open_tab(host, &destination.workspace_id, &path, cancelled)?;
+            run.workspace = Some(Workspace {
+                backend: Backend::Herdr,
+                id: destination.workspace_id.clone(),
+                host: ssh.clone(),
+                path: Some(path.into()),
+                branch: request.branch.clone(),
+            });
+            pane
+        }
+    };
     if let Some(workspace) = &mut run.workspace {
         workspace.id.clone_from(&destination.workspace_id);
     }
@@ -621,9 +644,7 @@ fn launch(
         host,
         &start,
         &herdr_session.pane_id,
-        pane.terminal_id
-            .as_deref()
-            .or(worktree.root_pane.terminal_id.as_deref()),
+        pane.terminal_id.as_deref(),
         cancelled,
     )?;
     // The pane is the target: a name could match an agent started elsewhere.

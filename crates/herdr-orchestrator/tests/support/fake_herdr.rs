@@ -38,6 +38,13 @@ fn main() {
             r#""worktree":{"path":"/tmp/wt/377-icons"}}}"#
         )
         .into(),
+        ["worktree", "list"] => {
+            read("worktrees").unwrap_or_else(|| r#"{"result":{"worktrees":[]}}"#.into())
+        }
+        ["tab", "create"] => {
+            r#"{"result":{"tab":{"tab_id":"w1:t3"},"root_pane":{"pane_id":"w1:p10","terminal_id":"term10"}}}"#
+                .into()
+        }
         ["pane", "move"] => {
             r#"{"result":{"move_result":{"pane":{"pane_id":"w1:p9","terminal_id":"term9"}}}}"#
                 .into()

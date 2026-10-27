@@ -12,6 +12,7 @@ mod agent_name;
 mod folder_tab;
 mod parent;
 mod remove;
+mod reuse;
 mod startup;
 
 /// `tests/support/fake_herdr.rs`, compiled once per test process: a program
