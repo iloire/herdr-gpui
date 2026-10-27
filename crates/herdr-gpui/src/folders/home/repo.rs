@@ -419,7 +419,7 @@ impl HerdrWindow {
             let open = shown.workspaces.first().and_then(|workspace| {
                 cards
                     .iter()
-                    .find(|other| other.endpoint_index == 0 && other.workspace == workspace.id)
+                    .find(|other| other.endpoint_index == 0 && other.holds(&workspace.id))
                     .cloned()
             });
             let name = std::path::Path::new(&checkout.path)

@@ -341,14 +341,7 @@ impl HerdrWindow {
         let issues = self
             .folder_open_issues(card, cx)
             .filter(|issues| *issues > 0);
-        let parts: [(&str, &str, &str, Option<usize>, Part); 3] = [
-            (
-                "terminals",
-                "Terminals",
-                "icons/terminal.svg",
-                Some(card.tabs).filter(|tabs| *tabs > 0),
-                Part::Terminals,
-            ),
+        let parts: [(&str, &str, &str, Option<usize>, Part); 2] = [
             (
                 "changes",
                 "Changes",
@@ -366,22 +359,30 @@ impl HerdrWindow {
             .my_1()
             .border_l_1()
             .border_color(rgb(theme.active))
+            .children(self.folder_terminals(look, card, cx))
             .children(parts.into_iter().map(|(key, label, icon, count, part)| {
                 let clicked = card.clone();
-                part_row(look, key, label, icon, count, part == self.folders.part)
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.select_folder(&clicked, Some(part), window, cx);
-                    }))
-                    // Commits not pushed yet, as the branch line marks them.
-                    .when(part == Part::Changes && ahead > 0, |row| {
-                        row.child(
-                            div()
-                                .debug_selector(|| "folder-part-changes-ahead".into())
-                                .text_size(look.small())
-                                .text_color(rgb(look.status(AgentStatus::Working)))
-                                .child(format!("\u{2191}{ahead}")),
-                        )
-                    })
+                part_row(
+                    look,
+                    key,
+                    label.into(),
+                    icon,
+                    count,
+                    part == self.folders.part,
+                )
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.select_folder(&clicked, Some(part), window, cx);
+                }))
+                // Commits not pushed yet, as the branch line marks them.
+                .when(part == Part::Changes && ahead > 0, |row| {
+                    row.child(
+                        div()
+                            .debug_selector(|| "folder-part-changes-ahead".into())
+                            .text_size(look.small())
+                            .text_color(rgb(look.status(AgentStatus::Working)))
+                            .child(format!("\u{2191}{ahead}")),
+                    )
+                })
             }))
             // The repository's open issues live in the Issues section, so
             // the row opens it narrowed to this project rather than a part.
@@ -391,7 +392,7 @@ impl HerdrWindow {
                     part_row(
                         look,
                         "issues",
-                        "Issues",
+                        "Issues".into(),
                         "icons/issue.svg",
                         Some(issues),
                         false,
@@ -414,6 +415,59 @@ impl HerdrWindow {
                 )
             })
     }
+
+    /// The folder's Terminals: one row, or with several workspaces in the
+    /// folder, a row for each, named for it, with its own agent's mark.
+    fn folder_terminals(
+        &self,
+        look: &Look,
+        card: &Card,
+        cx: &mut Context<Self>,
+    ) -> Vec<Stateful<Div>> {
+        let terminals = self.folders.part == Part::Terminals;
+        if card.workspaces.len() < 2 {
+            let clicked = card.clone();
+            let row = part_row(
+                look,
+                "terminals",
+                "Terminals".into(),
+                "icons/terminal.svg",
+                Some(card.tabs).filter(|tabs| *tabs > 0),
+                terminals,
+            )
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.select_folder(&clicked, Some(Part::Terminals), window, cx);
+            }));
+            return vec![row];
+        }
+        card.workspaces
+            .iter()
+            .map(|member| {
+                let picked = terminals && self.shows_workspace(card.endpoint_index, &member.id);
+                let (clicked, workspace) = (card.clone(), member.id.clone());
+                part_row(
+                    look,
+                    &format!("terminals-{}", member.id),
+                    format!("Terminals \u{b7} {}", member.name).into(),
+                    "icons/terminal.svg",
+                    Some(member.tabs).filter(|tabs| *tabs > 0),
+                    picked,
+                )
+                .when_some(member.agent.as_ref(), |row, agent| {
+                    row.child(look.dot(agent.state.status()))
+                })
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.select_folder_workspace(
+                        &clicked,
+                        &workspace,
+                        Some(Part::Terminals),
+                        window,
+                        cx,
+                    );
+                }))
+            })
+            .collect()
+    }
 }
 
 /// A row among the selected folder's parts: its icon, label, and count,
@@ -421,7 +475,7 @@ impl HerdrWindow {
 fn part_row(
     look: &Look,
     key: &str,
-    label: &'static str,
+    label: SharedString,
     icon: &'static str,
     count: Option<usize>,
     picked: bool,

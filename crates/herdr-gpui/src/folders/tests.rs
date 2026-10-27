@@ -13,6 +13,7 @@ mod parts;
 mod ports;
 mod quiet;
 mod resize;
+mod shared_folder;
 mod status_icons;
 
 use super::model::{Card, Dirty, Host, Summary, cards, hue, monogram};

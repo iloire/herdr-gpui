@@ -55,7 +55,7 @@ impl Part {
     }
 }
 
-/// A folder, by endpoint and workspace id.
+/// A folder, by endpoint and the id of a workspace in it.
 type Key = (String, String);
 
 /// The page's own state in a window.
@@ -132,11 +132,7 @@ impl HerdrWindow {
     /// shows, which the keyboard may have moved to; else the one picked, else
     /// the first listed.
     fn selected_folder<'a>(&self, cards: &'a [Card]) -> Option<&'a Card> {
-        let shown = || {
-            cards
-                .iter()
-                .find(|card| self.shows_workspace(card.endpoint_index, &card.workspace))
-        };
+        let shown = || cards.iter().find(|card| self.shows_folder(card));
         let picked = || {
             self.folders
                 .selected
@@ -144,16 +140,24 @@ impl HerdrWindow {
                 .and_then(|(endpoint, workspace)| {
                     cards
                         .iter()
-                        .find(|card| card.endpoint == *endpoint && card.workspace == *workspace)
+                        .find(|card| card.endpoint == *endpoint && card.holds(workspace))
                 })
         };
         let shown = self.folders.part.beside_terminals().then(shown).flatten();
         shown.or_else(picked).or_else(|| cards.first())
     }
 
+    /// Whether the window shows one of the folder's workspaces.
+    fn shows_folder(&self, card: &Card) -> bool {
+        card.workspaces
+            .iter()
+            .any(|member| self.shows_workspace(card.endpoint_index, &member.id))
+    }
+
     /// Unfolds a folder at `part`, or, with none given, at the part it was
-    /// left on, else the part shown now. Terminals and Files show its
-    /// workspace with the keyboard in its terminal.
+    /// left on, else the part shown now. Terminals and Files show the
+    /// folder's workspace the window shows, else the one last picked in it,
+    /// else its first.
     fn select_folder(
         &mut self,
         card: &Card,
@@ -161,13 +165,41 @@ impl HerdrWindow {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        let picked = self
+            .folders
+            .selected
+            .as_ref()
+            .filter(|(endpoint, workspace)| *endpoint == card.endpoint && card.holds(workspace))
+            .map(|(_, workspace)| workspace.as_str());
+        let workspace = card
+            .workspaces
+            .iter()
+            .map(|member| member.id.as_str())
+            .find(|id| self.shows_workspace(card.endpoint_index, id))
+            .or(picked)
+            .unwrap_or(&card.workspace)
+            .to_owned();
+        self.select_folder_workspace(card, &workspace, part, window, cx);
+    }
+
+    /// Unfolds a folder at `part` as `select_folder` does, on its
+    /// `workspace`, as a workspace's own Terminals row picks.
+    fn select_folder_workspace(
+        &mut self,
+        card: &Card,
+        workspace: &str,
+        part: Option<Part>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // Parts are remembered per folder, under its first workspace.
         let key = (card.endpoint.clone(), card.workspace.clone());
         self.folders.follow_opened = false;
         let part = part
             .or_else(|| self.folders.parts.get(&key).copied())
             .unwrap_or(self.folders.part);
         let files = self.files_view();
-        self.folders.selected = Some(key.clone());
+        self.folders.selected = Some((card.endpoint.clone(), workspace.to_owned()));
         self.folders.part = part;
         self.folders.parts.insert(key, part);
         if files != self.files_view() {
@@ -183,12 +215,12 @@ impl HerdrWindow {
                 self.focus_folders_page(window, cx);
             }
             Part::Terminals => {
-                self.go_to_workspace(card.endpoint_index, &card.workspace, cx);
+                self.go_to_workspace(card.endpoint_index, workspace, cx);
                 window.focus(&self.focus, cx);
             }
             // The keyboard goes to the file shown, never the hidden terminal.
             Part::Files => {
-                self.go_to_workspace(card.endpoint_index, &card.workspace, cx);
+                self.go_to_workspace(card.endpoint_index, workspace, cx);
                 if !self.focus_shown_code_tab(window, cx) {
                     self.focus_folders_page(window, cx);
                 }
@@ -238,7 +270,7 @@ impl HerdrWindow {
     fn shown_folder(&self, cx: &App) -> Option<Card> {
         self.folder_cards(cx)
             .into_iter()
-            .find(|card| self.shows_workspace(card.endpoint_index, &card.workspace))
+            .find(|card| self.shows_folder(card))
     }
 
     /// The list's +: the palette on its projects, the most recent first.

@@ -88,7 +88,7 @@ impl HerdrWindow {
     fn home_agents(&self, look: &Look, card: &Card, cx: &mut Context<Self>) -> Stateful<Div> {
         let theme = look.theme;
         let rows = self.overview_rows(cx);
-        let mine = model::rows_of(&rows, &card.endpoint, &card.workspace);
+        let mine = model::rows_of(&rows, &card.endpoint, |id| card.holds(id));
         let count = (!mine.is_empty()).then(|| mine.len().to_string());
         let mut list = div().flex().flex_col().gap_1();
         if mine.is_empty() {

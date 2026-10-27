@@ -5,7 +5,8 @@
 //! daemon owns the order, so the sidebar and every other client follow, and
 //! the preview holds until its next snapshot reorders the list.
 //!
-//! A folder moves among its own host's folders, one workspace at a time.
+//! A folder moves among its own host's folders, with every workspace open
+//! in it gathered behind its first.
 
 use super::model::Card;
 use crate::{
@@ -21,7 +22,10 @@ use std::{cell::RefCell, collections::HashMap, time::Instant};
 pub(crate) struct FolderDrag {
     endpoint: usize,
     boot: String,
+    /// The folder's first workspace, which stands for its row.
     workspace: String,
+    /// Every workspace in the folder, moved as one block.
+    members: Vec<String>,
     origin: Point<Pixels>,
     pointer: Point<Pixels>,
     pub(super) lifted: bool,
@@ -195,6 +199,11 @@ impl HerdrWindow {
             endpoint: card.endpoint_index,
             boot,
             workspace: card.workspace.clone(),
+            members: card
+                .workspaces
+                .iter()
+                .map(|member| member.id.clone())
+                .collect(),
             origin: position,
             pointer: position,
             lifted: false,
@@ -276,7 +285,7 @@ impl HerdrWindow {
         if snapshot.boot_id != drag.boot {
             return true;
         }
-        let request = MoveBlock::new(vec![drag.workspace.clone()], rows.ids.get(slot).cloned())
+        let request = MoveBlock::new(drag.members.clone(), rows.ids.get(slot).cloned())
             .reorder(&snapshot.workspaces, live.supports_workspace_move);
         match handle.reorder_workspaces(&drag.boot, &request) {
             Ok(_) => {

@@ -23,6 +23,10 @@ pub(super) fn fixture(
             let mut shown = snapshot(2);
             shown.focused_workspace_id = Some("w0".into());
             shown.agents[1].agent_status = AgentStatus::Blocked;
+            // A folder each: workspaces sharing one share a card.
+            for workspace in &mut shown.workspaces {
+                workspace.new_workspace_cwd = format!("/tmp/{}", workspace.workspace_id);
+            }
             view.live.snapshot = Some(Arc::new(shown));
             view.live.status = ConnectionStatus::Connected;
             view

@@ -1,7 +1,9 @@
 //! What the Folders page shows, gathered from the window's prepared state
-//! before drawing: one card per open workspace on every connected host,
-//! with the Git state its daemon reports, the uncommitted files the Changes
+//! before drawing: one card per folder open on every connected host, with
+//! the Git state its daemon reports, the uncommitted files the Changes
 //! reader found in it, and its most pressing agent from the Overview's rows.
+//! Workspaces a host has open in the same folder share one card; each
+//! keeps its own terminals under it.
 
 use crate::{
     changes::Repo,
@@ -26,12 +28,16 @@ pub(crate) struct Host<'a> {
 pub(crate) struct Card {
     pub endpoint_index: usize,
     pub endpoint: String,
+    /// The folder's first workspace in sidebar order, which stands for it.
     pub workspace: String,
     pub name: String,
+    /// Every workspace open in the folder, the first one first.
+    pub workspaces: Vec<Member>,
     /// The folder new tabs start in, as the daemon names it.
     pub folder: String,
     /// The checkout the Changes reader found the workspace in, by path.
     pub checkout: Option<String>,
+    /// Terminal tabs across the folder's workspaces.
     pub tabs: usize,
     pub host: Option<String>,
     pub branch: Option<String>,
@@ -39,9 +45,19 @@ pub(crate) struct Card {
     pub behind: usize,
     /// `None` when no read of this host's files was made.
     pub dirty: Option<Dirty>,
+    /// The most pressing agent across the folder's workspaces.
     pub agent: Option<Agent>,
-    /// The workspace's place in its host's sidebar, which orders the list.
+    /// The first workspace's place in its host's sidebar, which orders the list.
     number: usize,
+}
+
+/// A workspace open in a card's folder.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Member {
+    pub id: String,
+    pub name: String,
+    pub tabs: usize,
+    pub agent: Option<Agent>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -72,9 +88,15 @@ impl Card {
     }
 
     /// The workspace's label, when it names the folder something other than
-    /// its own name, as a second workspace in one folder does.
+    /// its own name. A folder with several workspaces names each on its own
+    /// Terminals row instead.
     pub(crate) fn alias(&self) -> Option<&str> {
-        Some(self.name.as_str()).filter(|name| *name != self.title())
+        Some(self.name.as_str()).filter(|name| *name != self.title() && self.workspaces.len() < 2)
+    }
+
+    /// Whether `workspace` is one of the folder's.
+    pub(crate) fn holds(&self, workspace: &str) -> bool {
+        self.workspaces.iter().any(|member| member.id == workspace)
     }
 
     /// Whether the folder's row needs a branch line: not on the usual
@@ -115,8 +137,9 @@ impl Card {
     }
 }
 
-/// Every host's workspaces as cards, in host and sidebar order: the order
-/// the user arranges, by dragging here or in the sidebar.
+/// Every host's folders as cards, in host and sidebar order: the order
+/// the user arranges, by dragging here or in the sidebar. A folder sits
+/// where its first workspace does.
 pub(crate) fn cards<'a>(hosts: impl IntoIterator<Item = Host<'a>>, rows: &[Row]) -> Vec<Card> {
     let mut cards: Vec<Card> = hosts
         .into_iter()
@@ -129,19 +152,28 @@ pub(crate) fn cards<'a>(hosts: impl IntoIterator<Item = Host<'a>>, rows: &[Row])
                     Some(checkout) => (checkout.ahead as usize, checkout.behind as usize),
                     None => workspace.git_ahead_behind.unwrap_or_default(),
                 };
+                let id = workspace.workspace_id.as_str();
+                let tabs = host
+                    .snapshot
+                    .tabs
+                    .iter()
+                    .filter(|tab| tab.workspace_id == id)
+                    .count();
+                let agent = agent_of(rows, host.id, |open| open == id);
                 Card {
                     endpoint_index: host.index,
                     endpoint: host.id.to_owned(),
                     workspace: workspace.workspace_id.clone(),
                     name: workspace.label.clone(),
+                    workspaces: vec![Member {
+                        id: workspace.workspace_id.clone(),
+                        name: workspace.label.clone(),
+                        tabs,
+                        agent: agent.clone(),
+                    }],
                     folder: workspace.new_workspace_cwd.clone(),
                     checkout: checkout.map(|checkout| checkout.path.clone()),
-                    tabs: host
-                        .snapshot
-                        .tabs
-                        .iter()
-                        .filter(|tab| tab.workspace_id == workspace.workspace_id)
-                        .count(),
+                    tabs,
                     host: host.label.map(str::to_owned),
                     branch: checkout
                         .and_then(|checkout| checkout.branch.clone())
@@ -160,14 +192,36 @@ pub(crate) fn cards<'a>(hosts: impl IntoIterator<Item = Host<'a>>, rows: &[Row])
                             }
                         })
                     }),
-                    agent: agent_of(rows, host.id, &workspace.workspace_id),
+                    agent,
                     number: workspace.number,
                 }
             })
         })
         .collect();
     cards.sort_by_key(|card| (card.endpoint_index, card.number));
-    cards
+    let mut folders: Vec<Card> = Vec::with_capacity(cards.len());
+    for card in cards {
+        let same = |folder: &&mut Card| {
+            !card.folder.is_empty()
+                && folder.endpoint_index == card.endpoint_index
+                && folder.folder == card.folder
+        };
+        match folders.iter_mut().find(same) {
+            Some(folder) => {
+                folder.tabs += card.tabs;
+                folder.workspaces.extend(card.workspaces);
+            }
+            None => folders.push(card),
+        }
+    }
+    for folder in folders
+        .iter_mut()
+        .filter(|folder| folder.workspaces.len() > 1)
+    {
+        let agent = agent_of(rows, &folder.endpoint, |open| folder.holds(open));
+        folder.agent = agent;
+    }
+    folders
 }
 
 /// The checkout a workspace is in: the one holding its folder, else the
@@ -191,23 +245,28 @@ fn checkout_of<'a>(
     Some(found.find(|checkout| holds(checkout)).unwrap_or(first))
 }
 
-/// The rows of `workspace`'s agents on `endpoint`, most pressing first.
-pub(crate) fn rows_of<'a>(rows: &'a [Row], endpoint: &str, workspace: &str) -> Vec<&'a Row> {
+/// The rows of the agents on `endpoint` in the workspaces `held` accepts,
+/// most pressing first.
+pub(crate) fn rows_of<'a>(
+    rows: &'a [Row],
+    endpoint: &str,
+    held: impl Fn(&str) -> bool,
+) -> Vec<&'a Row> {
     let mut mine: Vec<&Row> = rows
         .iter()
         .filter(|row| {
             matches!(&row.open, Open::Pane { endpoint: host, workspace: id, .. }
-                if host == endpoint && id == workspace)
+                if host == endpoint && held(id))
         })
         .collect();
     mine.sort_by_key(|row| (row.state, std::cmp::Reverse(row.since)));
     mine
 }
 
-/// The workspace's most pressing agent, the one that entered its state last
-/// among equals.
-fn agent_of(rows: &[Row], endpoint: &str, workspace: &str) -> Option<Agent> {
-    let mine = rows_of(rows, endpoint, workspace);
+/// The most pressing agent in the workspaces `held` accepts, the one that
+/// entered its state last among equals.
+fn agent_of(rows: &[Row], endpoint: &str, held: impl Fn(&str) -> bool) -> Option<Agent> {
+    let mine = rows_of(rows, endpoint, held);
     let lead = mine.first()?;
     Some(Agent {
         state: lead.state,
