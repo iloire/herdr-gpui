@@ -43,3 +43,10 @@ fn every_action_is_listed_once() {
     let unique: std::collections::HashSet<Action> = actions.iter().copied().collect();
     assert_eq!(unique.len(), actions.len());
 }
+
+#[test]
+fn files_and_folders_open_in_vs_code() {
+    for (path, folder) in [("src/main.rs", false), ("src", true)] {
+        assert!(labels(path, folder).contains(&"Open in VS Code"));
+    }
+}

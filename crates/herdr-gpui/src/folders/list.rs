@@ -364,7 +364,7 @@ impl HerdrWindow {
             .border_color(rgb(theme.active))
             .children(self.folder_terminals(look, card, cx))
             .children(parts.into_iter().map(|(key, label, icon, count, part)| {
-                let clicked = card.clone();
+                let (clicked, menu) = (card.clone(), card.clone());
                 part_row(
                     look,
                     key,
@@ -376,6 +376,16 @@ impl HerdrWindow {
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.select_folder(&clicked, Some(part), window, cx);
                 }))
+                // The folder's own menu, to open its files elsewhere.
+                .when(part == Part::Files, |row| {
+                    row.on_mouse_down(
+                        MouseButton::Right,
+                        cx.listener(move |this, event: &MouseDownEvent, window, cx| {
+                            cx.stop_propagation();
+                            this.open_folder_menu(&menu, event.position, window, cx);
+                        }),
+                    )
+                })
                 // Commits not pushed yet, as the branch line marks them.
                 .when(part == Part::Changes && ahead > 0, |row| {
                     row.child(

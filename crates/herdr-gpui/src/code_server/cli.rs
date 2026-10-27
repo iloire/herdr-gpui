@@ -34,9 +34,26 @@ pub(super) fn find() -> Option<PathBuf> {
     )
 }
 
+/// VS Code's own `code` command, which opens folders and files in the
+/// desktop app, when VS Code is installed.
+pub(super) fn command() -> Option<PathBuf> {
+    command_in(
+        crate::login_env::path().as_deref(),
+        BUNDLED.iter().map(Path::new),
+    )
+}
+
 /// The first `code` on `path`, else the first of `bundled` there is, as the
 /// program that serves.
 fn find_in<'a>(
+    path: Option<&OsStr>,
+    bundled: impl IntoIterator<Item = &'a Path>,
+) -> Option<PathBuf> {
+    command_in(path, bundled).map(|command| server(&command))
+}
+
+/// The first `code` on `path`, else the first of `bundled` there is.
+fn command_in<'a>(
     path: Option<&OsStr>,
     bundled: impl IntoIterator<Item = &'a Path>,
 ) -> Option<PathBuf> {
@@ -46,7 +63,6 @@ fn find_in<'a>(
         .map(|dir| dir.join(COMMAND))
         .chain(bundled.into_iter().map(Path::to_path_buf))
         .find(|command| runnable(command))
-        .map(|command| server(&command))
 }
 
 /// The program beside `command`, through any links to it, else `command`

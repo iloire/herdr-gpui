@@ -6,7 +6,9 @@
 //! The submodules start such a server for VS Code tabs: [`cli`] finds VS Code's
 //! command, [`token`] keeps the connection token, [`supervisor`] runs the
 //! child process, and [`launcher`] ties them to the windows and the config.
+//! [`desktop`] opens a folder in the VS Code app itself instead.
 mod cli;
+pub(crate) mod desktop;
 mod error;
 pub(crate) mod launcher;
 pub(crate) mod supervisor;

@@ -17,6 +17,8 @@ pub(super) enum Action {
     OpenSource,
     /// In the terminal editor beside the focused pane.
     OpenInEditor,
+    /// In the VS Code app, in a window on the checkout.
+    OpenInVsCode,
     /// A Herdr folder of its own, with a shell there.
     NewFolder,
     /// A file in its default app, a folder in the file manager.
@@ -61,6 +63,7 @@ impl FilesMenu {
             opens.push(Action::OpenInEditor);
             opens
         };
+        actions.push(Action::OpenInVsCode);
         #[cfg(any(target_os = "macos", target_os = "linux"))]
         {
             actions.push(Action::OpenDefault);
@@ -78,6 +81,7 @@ impl FilesMenu {
             Action::Open => "Open",
             Action::OpenSource => "Open as Source",
             Action::OpenInEditor => "Open in Editor",
+            Action::OpenInVsCode => "Open in VS Code",
             Action::NewFolder => "Open as New Folder",
             #[cfg(target_os = "macos")]
             Action::OpenDefault if self.folder => "Open in Finder",
@@ -101,6 +105,7 @@ impl FilesMenu {
             Action::Open => "icons/file.svg",
             Action::OpenSource => "icons/code.svg",
             Action::OpenInEditor => "icons/terminal.svg",
+            Action::OpenInVsCode => crate::browser::Editor::VsCode.icon(),
             Action::NewFolder => "icons/plus.svg",
             #[cfg(any(target_os = "macos", target_os = "linux"))]
             Action::OpenDefault if self.is_web_page() => "icons/globe.svg",
@@ -155,6 +160,11 @@ impl HerdrWindow {
             Action::Open => self.open_from_files_menu(&menu, Opening::Tab, window, cx),
             Action::OpenSource => self.open_from_files_menu(&menu, Opening::Source, window, cx),
             Action::OpenInEditor => self.open_from_files_menu(&menu, Opening::Editor, window, cx),
+            Action::OpenInVsCode => {
+                // The checkout as the window's folder, then the entry in it.
+                let entry = menu.full();
+                self.open_in_vs_code(vec![menu.root, entry], cx);
+            }
             Action::NewFolder => self.open_files_folder(&menu, cx),
             #[cfg(any(target_os = "macos", target_os = "linux"))]
             Action::OpenDefault => crate::folder::open_path(false, menu.full(), cx),

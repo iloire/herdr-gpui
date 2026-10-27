@@ -14,7 +14,7 @@ use super::{
 use crate::{HerdrWindow, editor::EditorTarget, fonts::StyledFont};
 use gpui::{prelude::*, *};
 use herdr_vcs::code_index::Change;
-use std::ops::Range;
+use std::{ops::Range, path::Path};
 
 /// How far each level of the tree steps in.
 const INDENT: f32 = 12.;
@@ -159,6 +159,19 @@ impl HerdrWindow {
                     .text_color(rgb(theme.muted))
                     .children(self.files.here.as_ref().map(|here| format!("/ {here}"))),
             )
+            .when_some(self.files.root().map(Path::to_path_buf), |header, root| {
+                header.child(
+                    button(
+                        "files-vs-code",
+                        crate::browser::Editor::VsCode.icon(),
+                        theme.muted,
+                        "Open in VS Code",
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.open_in_vs_code(vec![root.clone()], cx);
+                    })),
+                )
+            })
             .child(
                 button(
                     "files-collapse",

@@ -12,6 +12,8 @@ pub(super) enum Action {
     /// Only this computer's folders open here.
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     OpenFolder,
+    /// In the VS Code app, as its own window; this computer's folders only.
+    OpenInVsCode,
 }
 
 impl Action {
@@ -20,6 +22,7 @@ impl Action {
             Self::CopyPath => "Copy Path",
             #[cfg(any(target_os = "macos", target_os = "linux"))]
             Self::OpenFolder => "Open Folder",
+            Self::OpenInVsCode => "Open in VS Code",
         }
     }
 
@@ -28,6 +31,7 @@ impl Action {
             Self::CopyPath => "icons/copy.svg",
             #[cfg(any(target_os = "macos", target_os = "linux"))]
             Self::OpenFolder => "icons/external.svg",
+            Self::OpenInVsCode => crate::browser::Editor::VsCode.icon(),
         }
     }
 }
@@ -35,7 +39,6 @@ impl Action {
 pub(crate) struct FolderMenu {
     /// The folder's full path, as its host names it.
     folder: String,
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
     local: bool,
     selected: Option<usize>,
 }
@@ -44,18 +47,21 @@ impl FolderMenu {
     pub(super) fn new(card: &Card) -> Self {
         Self {
             folder: card.folder.clone(),
-            #[cfg(any(target_os = "macos", target_os = "linux"))]
             local: card.host.is_none(),
             selected: None,
         }
     }
 
     pub(super) fn actions(&self) -> Vec<Action> {
-        #[cfg(any(target_os = "macos", target_os = "linux"))]
-        if self.local {
-            return vec![Action::CopyPath, Action::OpenFolder];
+        if !self.local {
+            return vec![Action::CopyPath];
         }
-        vec![Action::CopyPath]
+        vec![
+            Action::OpenInVsCode,
+            #[cfg(any(target_os = "macos", target_os = "linux"))]
+            Action::OpenFolder,
+            Action::CopyPath,
+        ]
     }
 }
 
@@ -93,6 +99,7 @@ impl HerdrWindow {
             }
             #[cfg(any(target_os = "macos", target_os = "linux"))]
             Action::OpenFolder => crate::folder::open_path(false, menu.folder.into(), cx),
+            Action::OpenInVsCode => self.open_in_vs_code(vec![menu.folder.into()], cx),
         }
     }
 

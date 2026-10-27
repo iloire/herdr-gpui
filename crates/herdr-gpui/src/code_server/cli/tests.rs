@@ -99,3 +99,15 @@ fn what_cannot_run_is_skipped() {
         Some(std::fs::canonicalize(&real).unwrap().join(COMMAND))
     );
 }
+
+/// Opening the desktop app runs `code` itself: the serving program beside it
+/// would start a server, not a window.
+#[test]
+fn the_desktop_command_is_code_not_the_server() {
+    let temp = tempfile::tempdir().unwrap();
+    let bin = temp.path().join("app").join("bin");
+    program(&bin.join(COMMAND));
+    program(&bin.join(SERVER));
+    let path = joined(&[&bin]);
+    assert_eq!(command_in(Some(&path), []), Some(bin.join(COMMAND)));
+}

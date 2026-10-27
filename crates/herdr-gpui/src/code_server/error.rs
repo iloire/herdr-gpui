@@ -57,6 +57,8 @@ pub enum Error {
     Watch(#[source] io::Error),
     #[error("VS Code did not answer within {} seconds.", .0.as_secs())]
     Silent(Duration),
+    #[error("VS Code is not installed: its `code` command is not on PATH.")]
+    NotInstalled,
     #[error("Could not start the VS Code worker.")]
     Worker(#[source] io::Error),
 }
