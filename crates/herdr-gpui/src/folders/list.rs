@@ -24,6 +24,9 @@ use herdr_client::protocol::AgentStatus;
 /// row's height.
 const ROW_GAP: f32 = 2.;
 
+/// How strongly a quiet folder's row shows.
+const QUIET_OPACITY: f32 = 0.55;
+
 impl HerdrWindow {
     pub(super) fn render_folder_list(
         &self,
@@ -275,6 +278,11 @@ impl HerdrWindow {
             })
             .when(carried, |row| {
                 row.cursor_grabbing().bg(rgb(theme.active)).shadow_lg()
+            })
+            // Seen with nothing left to do: faded, so the rows that still
+            // want something stand out. Hovering brings it back.
+            .when(!open && !carried && card.quiet(), |row| {
+                row.opacity(QUIET_OPACITY).hover(|style| style.opacity(1.))
             })
             .on_mouse_down(
                 MouseButton::Left,

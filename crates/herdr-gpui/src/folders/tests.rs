@@ -11,6 +11,7 @@ mod new_button;
 mod page;
 mod parts;
 mod ports;
+mod quiet;
 mod resize;
 mod status_icons;
 

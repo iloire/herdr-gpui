@@ -95,6 +95,18 @@ impl Card {
         }
     }
 
+    /// Whether nothing in the folder asks for a look: its agent, if any,
+    /// is idle (finished and seen), and nothing waits to be committed or
+    /// pushed. The list dims such a row.
+    pub(crate) fn quiet(&self) -> bool {
+        let idle = self
+            .agent
+            .as_ref()
+            .is_none_or(|agent| agent.state == State::Idle);
+        let dirty = self.dirty.is_some_and(|dirty| dirty.files > 0);
+        idle && !dirty && self.ahead == 0
+    }
+
     /// Whether the folder's agent waits on the user.
     pub(crate) fn waiting(&self) -> bool {
         self.agent
