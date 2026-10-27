@@ -153,6 +153,7 @@ impl HerdrWindow {
         };
         // `target` borrows the window, so the field is set directly.
         self.last_input = Some(std::time::Instant::now());
+        let submitted = crate::pending_tab::submits(&event);
         let handle = &self.endpoints[self.selected_endpoint].connection.handle;
         if let Some(handle) = handle
             && let Err(error) =
@@ -161,6 +162,10 @@ impl HerdrWindow {
             self.local_error = Some(format!("Input not sent: {error}"));
             cx.notify();
             return false;
+        }
+        if submitted && let InputTarget::Pane(pane) = &target.input {
+            let pane = pane.clone();
+            self.clear_pending_for_pane(&pane, cx);
         }
         true
     }
@@ -515,10 +520,16 @@ impl HerdrWindow {
         event: ClientPaneInputEvent,
         cx: &mut Context<Self>,
     ) -> Delivery {
+        let submitted = crate::pending_tab::submits(&event);
         let error = match &self.endpoints[self.selected_endpoint].connection.handle {
             Some(handle) => {
                 match ConnectionBridge::send_input(handle, &target.boot, &target.input, event) {
-                    Ok(()) => return Delivery::Queued,
+                    Ok(()) => {
+                        if submitted && let InputTarget::Pane(pane) = &target.input {
+                            self.clear_pending_for_pane(pane, cx);
+                        }
+                        return Delivery::Queued;
+                    }
                     Err(error) => error.to_string(),
                 }
             }

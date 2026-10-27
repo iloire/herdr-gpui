@@ -2,7 +2,8 @@
 //! one washed in the accent while its group has the keyboard.
 
 use super::{
-    Lead, TabContext, TabFace, TabLayout, TabShape, TabState, close_button, lead_mark, zoom_mark,
+    Lead, TabContext, TabFace, TabLayout, TabShape, TabState, close_button, lead_mark, title,
+    zoom_mark,
 };
 use crate::{
     config::{FontConfig, Theme},
@@ -105,7 +106,7 @@ impl TabLayout for Classic {
                     .items_center()
                     .gap(px(DOT_GAP))
                     .children(lead_mark(&mark, &probe, ICON, text, cx))
-                    .child(label)
+                    .child(title(label, cx))
                     .children(zoom_mark(zoomed, &probe, text, cx)),
             )
             .child(close_button(close, &probe, CLOSE, text, cx))

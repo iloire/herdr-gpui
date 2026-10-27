@@ -4,7 +4,7 @@
 
 use super::{
     DOT_GAP, FLOATING_NEW_TAB_WIDTH, FLOATING_PADDING, Lead, TabContext, TabFace, TabLayout,
-    TabShape, TabState, ZOOM_ICON, close_button, floating_new_tab, lead_mark, status_width,
+    TabShape, TabState, ZOOM_ICON, close_button, floating_new_tab, lead_mark, status_width, title,
     zoom_mark,
 };
 use crate::{
@@ -103,7 +103,7 @@ impl TabLayout for Underline {
                             .flex()
                             .items_center()
                             .gap(px(DOT_GAP))
-                            .child(label)
+                            .child(title(label, cx))
                             .children(zoom_mark(zoomed, &probe, text, cx)),
                     )
                     .child(

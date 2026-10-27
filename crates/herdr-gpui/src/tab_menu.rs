@@ -97,6 +97,8 @@ impl Target {
 enum Action {
     NewTab,
     Rename,
+    MarkPending,
+    ClearPending,
     MoveToWorkspace,
     Close,
 }
@@ -106,27 +108,36 @@ impl Action {
         match self {
             Self::NewTab => "New Tab",
             Self::Rename => "Rename",
+            Self::MarkPending => "Mark as Pending",
+            Self::ClearPending => "Clear Pending",
             Self::MoveToWorkspace => "Move to Workspace\u{2026}",
             Self::Close => "Close Tab",
         }
     }
 }
 
-/// Herdr's own tab menu, in its order.
-const ACTIONS: [Action; 4] = [
+/// Herdr's own tab menu, in its order, with this app's pending mark.
+const ACTIONS: &[Action] = &[
     Action::NewTab,
     Action::Rename,
+    Action::MarkPending,
+    Action::ClearPending,
     Action::MoveToWorkspace,
     Action::Close,
 ];
 
 impl TabMenu {
-    /// The rows this menu offers: moving to a workspace needs a host the
-    /// `herdr` CLI can run on and at least one pane in the tab.
+    /// The rows this menu offers: one of the pending rows, as the tab is
+    /// marked or not, and moving to a workspace when the host can run the
+    /// `herdr` CLI and the tab has a pane.
     fn actions(&self) -> Vec<Action> {
+        let marked = crate::pending_tab::is_marked(&self.target.label);
         ACTIONS
-            .into_iter()
+            .iter()
+            .copied()
             .filter(|action| match action {
+                Action::MarkPending => !marked,
+                Action::ClearPending => marked,
                 Action::MoveToWorkspace => self.movable && !self.target.panes.is_empty(),
                 _ => true,
             })
@@ -263,6 +274,13 @@ impl HerdrWindow {
             }
             // As the tab's own close button: the close confirmation decides.
             Action::Close => self.open_tab_close(&target.tab, window, cx),
+            Action::MarkPending | Action::ClearPending => {
+                self.dismiss_menu(window, cx);
+                if let Err(error) = self.toggle_pending(&target) {
+                    self.local_error = Some(format!("Pending mark not changed: {error}"));
+                    cx.notify();
+                }
+            }
             Action::MoveToWorkspace => {
                 if let Some(tab) = &mut self.menu.tab {
                     tab.selected = None;
@@ -287,6 +305,22 @@ impl HerdrWindow {
                 cx.notify();
             }
         }
+    }
+
+    /// Adds the pending mark to the menu's tab, or takes it off. The menu has
+    /// closed, and the label changes when Herdr's next snapshot lands.
+    fn toggle_pending(&self, target: &Target) -> crate::Result<()> {
+        if !self.input_ready() {
+            return Err(crate::Error::ConnectionNotReady);
+        }
+        let handle = self.endpoints[self.selected_endpoint]
+            .connection
+            .handle
+            .as_ref()
+            .ok_or(crate::Error::NotConnected)?;
+        let params = crate::pending_tab::toggle_params(&target.tab, &target.label);
+        handle.request(&target.boot, Method::TabRename, params)?;
+        Ok(())
     }
 
     /// Moves every pane in the menu's tab to `destination` through the `herdr`

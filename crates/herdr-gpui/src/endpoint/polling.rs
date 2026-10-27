@@ -78,6 +78,18 @@ impl HerdrWindow {
                 self.bell.queue(bells);
             }
             selected_changed |= index == self.selected_endpoint && updated != Redraw::None;
+            // A marked tab whose agent started working was answered, from
+            // this app or any other client of the daemon.
+            if updated != Redraw::None
+                && let (Some(handle), Some(snapshot)) =
+                    (&endpoint.connection.handle, &endpoint.live.snapshot)
+            {
+                for tab in endpoint.pending_tabs.started(snapshot) {
+                    if let Err(error) = crate::pending_tab::clear(handle, &snapshot.boot_id, tab) {
+                        tracing::debug!(%error, "Pending mark not cleared");
+                    }
+                }
+            }
             self.sound.poll(
                 &mut endpoint.sounds,
                 &mut endpoint.live,

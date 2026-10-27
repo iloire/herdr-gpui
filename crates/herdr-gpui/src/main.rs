@@ -107,6 +107,7 @@ mod palette;
 mod pane_menu;
 mod pane_move;
 mod panel_resize;
+mod pending_tab;
 mod plugin_values;
 mod plus_command;
 mod port_forward;

@@ -2876,6 +2876,12 @@ tabs. Splitting opens nothing new and moves no tab.
   **Close Tab**, as in Herdr's own tab menu. A zoomed tab, where one pane
   fills the tab, shows a corner mark after its title, and the pane menu
   offers **Zoom** or **Unzoom** to match.
+- **Mark as Pending** in the tab menu flags a tab you have read but still
+  owe something, with a ◆ before its name. The mark is part of Herdr's
+  shared tab label, so the TUI and other clients show it too, and
+  herdr-auto-title keeps it when it renames the tab. It clears itself when
+  you press Enter in the tab, or when the tab's agent starts working, even
+  if a different client sent the input; **Clear Pending** removes it by hand.
 - **…** also offers **Split Right**.
 - A split's new group opens from the right, sliding in at its own width
   while the group it came from gives up the room; a closed group folds away

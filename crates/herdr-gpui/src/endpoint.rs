@@ -170,6 +170,8 @@ pub(super) struct Endpoint {
     /// link can come back to the same daemon process.
     config_reload_pending: bool,
     sounds: crate::sound::Policy,
+    /// Each tab's agent status, to clear a pending mark when work starts.
+    pending_tabs: crate::pending_tab::Watch,
 }
 
 impl Endpoint {
@@ -235,6 +237,7 @@ impl Endpoint {
             initial_surface: false,
             config_reload_pending: false,
             sounds: Default::default(),
+            pending_tabs: Default::default(),
         }
     }
 

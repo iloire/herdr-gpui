@@ -5,7 +5,7 @@
 use super::{
     DOT_GAP, FLOATING_NEW_TAB_WIDTH, FLOATING_PADDING, TabContext, TabFace, TabLayout, TabShape,
     TabState, ZOOM_ICON, close_button, floating_new_tab, kind_icon, status_mark, status_width,
-    zoom_mark,
+    title, zoom_mark,
 };
 use crate::{
     config::{FontConfig, Theme, corners, mix},
@@ -110,7 +110,7 @@ impl TabLayout for Outline {
                     .flex()
                     .items_center()
                     .gap(px(DOT_GAP))
-                    .child(label)
+                    .child(title(label, cx))
                     .children(zoom_mark(zoomed, &probe, text, cx)),
             )
             .children(status_mark(&mark, &probe, cx))

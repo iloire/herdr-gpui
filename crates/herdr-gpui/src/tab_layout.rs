@@ -365,6 +365,24 @@ fn icon(path: &'static str, size: f32, color: u32) -> AnyElement {
         .into_any_element()
 }
 
+/// A tab's title, with a pending mark picked out in the theme's primary color
+/// so it reads as a flag rather than part of the name.
+fn title(label: SharedString, cx: &TabContext<'_>) -> StyledText {
+    let marked = crate::pending_tab::is_marked(&label);
+    let text = StyledText::new(label);
+    if !marked {
+        return text;
+    }
+    let diamond = 0..crate::pending_tab::MARK.trim_end().len();
+    text.with_highlights([(
+        diamond,
+        HighlightStyle {
+            color: Some(rgb(cx.theme.primary()).into()),
+            ..Default::default()
+        },
+    )])
+}
+
 /// The mark after a zoomed tab's title.
 fn zoom_mark(zoomed: bool, probe: &Probe, text: u32, cx: &TabContext<'_>) -> Option<Svg> {
     zoomed.then(|| {

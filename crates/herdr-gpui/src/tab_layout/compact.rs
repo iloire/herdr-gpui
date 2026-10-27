@@ -4,7 +4,7 @@
 
 use super::{
     DOT_GAP, FLOATING_NEW_TAB_WIDTH, FLOATING_PADDING, TabContext, TabFace, TabLayout, TabShape,
-    TabState, ZOOM_ICON, close_button, floating_new_tab, kind_icon, status_mark, zoom_mark,
+    TabState, ZOOM_ICON, close_button, floating_new_tab, kind_icon, status_mark, title, zoom_mark,
 };
 use crate::{
     config::{FontConfig, Theme, corners, mix},
@@ -107,7 +107,7 @@ impl TabLayout for Compact {
                         .flex()
                         .items_center()
                         .gap(px(DOT_GAP))
-                        .child(label.clone())
+                        .child(title(label.clone(), cx))
                         .children(zoom_mark(zoomed, &probe, text, cx)),
                 )
             })

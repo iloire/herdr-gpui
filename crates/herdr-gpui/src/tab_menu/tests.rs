@@ -7,6 +7,7 @@ use std::sync::Arc;
 // Moves run POSIX host scripts and are never offered on other clients.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod moves;
+mod pending;
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 #[gpui::test]
@@ -173,8 +174,8 @@ fn inactive_tab_menu_rename_composition_cancel_and_fences(cx: &mut TestAppContex
         });
         window.draw(cx).clear(cx);
     });
-    assert!(cx.debug_bounds("tab-menu-2").is_some());
-    assert!(cx.debug_bounds("tab-menu-3").is_none());
+    assert!(cx.debug_bounds("tab-menu-3").is_some());
+    assert!(cx.debug_bounds("tab-menu-4").is_none());
     let new_tab_row = cx.debug_bounds("tab-menu-0").unwrap();
     cx.simulate_mouse_move(new_tab_row.center(), None, Modifiers::default());
     assert_eq!(
@@ -196,7 +197,7 @@ fn inactive_tab_menu_rename_composition_cancel_and_fences(cx: &mut TestAppContex
                     view.selection_epoch += 1;
                 }
                 assert!(!view.menu_target_current());
-                for action in ACTIONS {
+                for &action in ACTIONS {
                     view.activate_tab_menu(action, window, cx);
                     assert!(view.menu.page == Some(Page::Tab));
                     assert!(view.menu.tab.as_ref().unwrap().error.is_some());
@@ -254,7 +255,7 @@ fn choose(cx: &mut VisualTestContext, tab: &'static str, row: &'static str) {
 #[gpui::test]
 fn close_tab_confirms_closing_that_tab_in_herdr(cx: &mut TestAppContext) {
     let (view, cx) = group_window(cx);
-    choose(cx, "tab-t1", "tab-menu-2");
+    choose(cx, "tab-t1", "tab-menu-3");
     view.read_with(cx, |view, _| {
         assert_eq!(view.menu.page, Some(Page::ConfirmClose));
         let snapshot = view.live.snapshot.as_ref().unwrap();
@@ -282,7 +283,7 @@ fn close_tab_in_a_split_confirms_closing_that_tab_in_herdr(cx: &mut TestAppConte
         assert_eq!(view.expected_new_tab_group(), Some(left));
     });
     // Close is the tab's own close, as without a split.
-    choose(cx, "tab-t1", "tab-menu-2");
+    choose(cx, "tab-t1", "tab-menu-3");
     view.read_with(cx, |view, _| {
         assert_eq!(view.menu.page, Some(Page::ConfirmClose));
         let snapshot = view.live.snapshot.as_ref().unwrap();
