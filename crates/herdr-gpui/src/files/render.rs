@@ -160,6 +160,21 @@ impl HerdrWindow {
                     .children(self.files.here.as_ref().map(|here| format!("/ {here}"))),
             )
             .when_some(self.files.root().map(Path::to_path_buf), |header, root| {
+                #[cfg(target_os = "macos")]
+                let header = header.when(crate::github_desktop::installed(), |header| {
+                    let root = root.clone();
+                    header.child(
+                        button(
+                            "files-github-desktop",
+                            "icons/github.svg",
+                            theme.muted,
+                            "Open in GitHub Desktop",
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.open_in_github_desktop(root.clone(), cx);
+                        })),
+                    )
+                });
                 header.child(
                     button(
                         "files-vs-code",

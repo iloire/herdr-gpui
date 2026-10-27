@@ -71,6 +71,8 @@ mod folders;
 mod font_picker;
 mod fonts;
 mod github;
+#[cfg(target_os = "macos")]
+mod github_desktop;
 mod group_menu;
 mod group_terminals;
 mod herdr_settings;

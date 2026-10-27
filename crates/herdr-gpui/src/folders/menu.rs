@@ -14,6 +14,9 @@ pub(super) enum Action {
     OpenFolder,
     /// In the VS Code app, as its own window; this computer's folders only.
     OpenInVsCode,
+    /// In GitHub Desktop, when it is installed; this computer's folders only.
+    #[cfg(target_os = "macos")]
+    OpenInGitHubDesktop,
 }
 
 impl Action {
@@ -23,6 +26,8 @@ impl Action {
             #[cfg(any(target_os = "macos", target_os = "linux"))]
             Self::OpenFolder => "Open Folder",
             Self::OpenInVsCode => "Open in VS Code",
+            #[cfg(target_os = "macos")]
+            Self::OpenInGitHubDesktop => "Open in GitHub Desktop",
         }
     }
 
@@ -32,6 +37,8 @@ impl Action {
             #[cfg(any(target_os = "macos", target_os = "linux"))]
             Self::OpenFolder => "icons/external.svg",
             Self::OpenInVsCode => crate::browser::Editor::VsCode.icon(),
+            #[cfg(target_os = "macos")]
+            Self::OpenInGitHubDesktop => "icons/github.svg",
         }
     }
 }
@@ -56,12 +63,17 @@ impl FolderMenu {
         if !self.local {
             return vec![Action::CopyPath];
         }
-        vec![
-            Action::OpenInVsCode,
+        let mut actions = vec![Action::OpenInVsCode];
+        #[cfg(target_os = "macos")]
+        if crate::github_desktop::installed() {
+            actions.push(Action::OpenInGitHubDesktop);
+        }
+        actions.extend([
             #[cfg(any(target_os = "macos", target_os = "linux"))]
             Action::OpenFolder,
             Action::CopyPath,
-        ]
+        ]);
+        actions
     }
 }
 
@@ -100,6 +112,8 @@ impl HerdrWindow {
             #[cfg(any(target_os = "macos", target_os = "linux"))]
             Action::OpenFolder => crate::folder::open_path(false, menu.folder.into(), cx),
             Action::OpenInVsCode => self.open_in_vs_code(vec![menu.folder.into()], cx),
+            #[cfg(target_os = "macos")]
+            Action::OpenInGitHubDesktop => self.open_in_github_desktop(menu.folder.into(), cx),
         }
     }
 

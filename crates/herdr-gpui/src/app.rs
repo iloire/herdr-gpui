@@ -463,6 +463,8 @@ pub(crate) fn run() -> std::process::ExitCode {
                 // Nor do they start VS Code.
                 crate::code_server::Launcher::install(cx);
                 crate::px0::Launcher::install(cx);
+                #[cfg(target_os = "macos")]
+                crate::github_desktop::install(cx);
                 // Nor do they install or ask the remote control service.
                 crate::remote::Supervisor::install(cx);
                 #[cfg(feature = "cloud")]
