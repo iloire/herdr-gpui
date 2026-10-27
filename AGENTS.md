@@ -66,6 +66,17 @@ stays warm and `just quick` answers in about a minute. Before starting, fetch
 and fast-forward `main`; when the change is done and `just quick` passes,
 commit and push to `main`.
 
+## Build Directory Size
+
+Cargo never deletes outputs it stops using, so `target/` grows with every
+dependency bump, feature set, and cross target; it once reached 100 GB.
+`scripts/check-target-size.sh` keeps it under 40 GB (`HERDR_TARGET_LIMIT_GB`
+overrides), pruning cross targets, then incremental caches, then each
+profile's compiled dependencies, and always keeping the `Herdr.app` bundles.
+`just quick`, `just bundle`, and `just build-release` run it before building.
+A new recipe that builds runs it first too, and a build run by hand (a bare
+`cargo build`) is followed by `bash scripts/check-target-size.sh`.
+
 ## Parallel Pull Requests
 
 Many pull requests are open at once, so code that every feature appends to is

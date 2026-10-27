@@ -64,6 +64,7 @@ quick *filter:
     cargo fmt --all
     bash scripts/check-file-size.sh
     python3 scripts/check-sorted.py
+    bash scripts/check-target-size.sh
     base=$(git merge-base HEAD origin/main)
     crates=$({ git diff --name-only "$base"; git ls-files --others --exclude-standard; } \
         | sed -n 's|^crates/\([^/]*\)/.*|\1|p' | sort -u \
@@ -133,6 +134,7 @@ mockup file="" feedback="" capture="":
     exec target/debug/herdr-gpui "${args[@]}"
 
 build-release:
+    bash scripts/check-target-size.sh
     cargo build --locked --release -p herdr-gpui -p herdr-acp -p herdr-automate -p herdr-remote-control
 
 # Compile and install the release executable into Cargo's bin directory.
@@ -180,6 +182,7 @@ bundle profile="release" features="":
         *) echo "Unknown profile: {{profile}} (release or debug)" >&2; exit 2 ;;
     esac
     app=target/{{profile}}/Herdr.app
+    bash scripts/check-target-size.sh
     cargo build --locked $flags --target-dir target -p herdr-gpui --features "{{features}}"
     cargo build --locked $flags --target-dir target -p herdr-acp -p herdr-automate -p herdr-remote-control
     mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
